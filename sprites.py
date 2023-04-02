@@ -72,8 +72,9 @@ class Player(pygame.sprite.Sprite):
     def update(self):
         if self.data.hp <= 0:
             self.kill()
-        self.movement()
-        self.animate()
+        if self.internalTick % 5 != 0:
+            self.movement()
+            self.animate()
         self.collide_enemy()
 
         self.rect.x += self.x_change
@@ -86,6 +87,22 @@ class Player(pygame.sprite.Sprite):
         self.internalTick += 1
         if self.internalTick > 600:
             self.internalTick = 0
+
+    def useItem(self, itemName):
+        for i in range(len(self.data.inv)):
+            print('checking', i, self.data.inv[i].info(), itemName)
+            if self.data.inv[i].name.lower() == itemName.lower():
+                for element in self.data.inv[i].tags:
+                    if element[0].lower() == 'hp':
+                        self.data.hp += element[1]
+                        if self.data.hp >= self.data.maxhpmp[0]:
+                            self.data.hp = self.data.maxhpmp[0]
+                    elif element[0].lower() == 'mp':
+                        self.data.mp += element[1]
+                        if self.data.mp >= self.data.maxhpmp[1]:
+                            self.data.mp = self.data.maxhpmp[1]
+                del self.data.inv[i]
+                break
 
     def movement(self):
         keys = pygame.key.get_pressed()
@@ -125,6 +142,7 @@ class Player(pygame.sprite.Sprite):
                 # Obtain data from each enemy object colliding with player
                 hitsList = []
                 if hits:
+                    # check if its contact damage
                     for entity in self.game.enemies:
                         if pygame.sprite.collide_rect(self, entity):
                             hitsList.append(entity)
@@ -143,6 +161,7 @@ class Player(pygame.sprite.Sprite):
                         self.kill()
                         self.game.playing = False
                 elif hits1:
+                    # Check if its skill damage
                     for entity in self.game.attacks:
                         if pygame.sprite.collide_rect(self, entity) and entity.ally == self.game.playerSprites:
                             hitsList.append(entity)
@@ -263,6 +282,7 @@ class Enemy(pygame.sprite.Sprite):
         self.rect.y = self.y
 
         self.aggro = False
+        self.aggroTick = 60
         self.aggroSummon = False
         self.collided = 0
         self.iframe = 0
@@ -272,34 +292,50 @@ class Enemy(pygame.sprite.Sprite):
         self.DistanceFromPlayer = math.sqrt(
             pow(self.DistanceFromPlayerX, 2) + pow(self.DistanceFromPlayerY, 2))
 
-        self.internalTick = random.randint(0, 100)
-        self.down_animations = [self.game.enemy_spritesheet.get_sprite(self.data.sprite[0], self.data.sprite[1], self.width, self.height),
-                                self.game.enemy_spritesheet.get_sprite(self.data.sprite[0] + 32, self.data.sprite[1], self.width, self.height),
-                                self.game.enemy_spritesheet.get_sprite(self.data.sprite[0] + 65, self.data.sprite[1], self.width, self.height)]
-        self.up_animations = [self.game.enemy_spritesheet.get_sprite(self.data.sprite[0], self.data.sprite[1] + 32, self.width, self.height),
-                              self.game.enemy_spritesheet.get_sprite(self.data.sprite[0] + 32, self.data.sprite[1] + 32, self.width, self.height),
-                              self.game.enemy_spritesheet.get_sprite(self.data.sprite[0] + 65, self.data.sprite[1] + 32, self.width, self.height)]
-        self.left_animations = [self.game.enemy_spritesheet.get_sprite(self.data.sprite[0], self.data.sprite[1] + 96, self.width, self.height),
-                                self.game.enemy_spritesheet.get_sprite(self.data.sprite[0] + 32, self.data.sprite[1] + 96, self.width, self.height),
-                                self.game.enemy_spritesheet.get_sprite(self.data.sprite[0] + 65, self.data.sprite[1] + 96, self.width, self.height)]
-        self.right_animations = [self.game.enemy_spritesheet.get_sprite(self.data.sprite[0], self.data.sprite[1] + 64, self.width, self.height),
-                                 self.game.enemy_spritesheet.get_sprite(self.data.sprite[0] + 32, self.data.sprite[1] + 64, self.width, self.height),
-                                 self.game.enemy_spritesheet.get_sprite(self.data.sprite[0] + 65, self.data.sprite[1] + 64, self.width, self.height)]
+        self.internalTick = 0
+        self.down_animations = [
+            self.game.enemy_spritesheet.get_sprite(self.data.sprite[0], self.data.sprite[1], self.width, self.height),
+            self.game.enemy_spritesheet.get_sprite(self.data.sprite[0] + 32, self.data.sprite[1], self.width,
+                                                   self.height),
+            self.game.enemy_spritesheet.get_sprite(self.data.sprite[0] + 65, self.data.sprite[1], self.width,
+                                                   self.height)]
+        self.up_animations = [
+            self.game.enemy_spritesheet.get_sprite(self.data.sprite[0], self.data.sprite[1] + 32, self.width,
+                                                   self.height),
+            self.game.enemy_spritesheet.get_sprite(self.data.sprite[0] + 32, self.data.sprite[1] + 32, self.width,
+                                                   self.height),
+            self.game.enemy_spritesheet.get_sprite(self.data.sprite[0] + 65, self.data.sprite[1] + 32, self.width,
+                                                   self.height)]
+        self.left_animations = [
+            self.game.enemy_spritesheet.get_sprite(self.data.sprite[0], self.data.sprite[1] + 96, self.width,
+                                                   self.height),
+            self.game.enemy_spritesheet.get_sprite(self.data.sprite[0] + 32, self.data.sprite[1] + 96, self.width,
+                                                   self.height),
+            self.game.enemy_spritesheet.get_sprite(self.data.sprite[0] + 65, self.data.sprite[1] + 96, self.width,
+                                                   self.height)]
+        self.right_animations = [
+            self.game.enemy_spritesheet.get_sprite(self.data.sprite[0], self.data.sprite[1] + 64, self.width,
+                                                   self.height),
+            self.game.enemy_spritesheet.get_sprite(self.data.sprite[0] + 32, self.data.sprite[1] + 64, self.width,
+                                                   self.height),
+            self.game.enemy_spritesheet.get_sprite(self.data.sprite[0] + 65, self.data.sprite[1] + 64, self.width,
+                                                   self.height)]
 
     def data(self):
         return self.data
 
     def update(self):
-        # print(self.data.hp)
+        print(self.internalTick)
         if self.data.hp <= 0:
             if self.data.name == 'watcher':
                 for sprite in self.game.enemies:
                     sprite.aggroSummon = False
             self.kill()
-        if random.randint(0, 60) >= 54 or (self.aggro and random.randint(0, 60) > 48):
+        if self.internalTick % 4 == 0 or (self.aggro and self.internalTick % 2 == 0):
             # 0.4 inactive / 0.6 active
             self.movement()
             self.animate()
+            pass
 
         self.rect.x += self.x_change
         # print('x, y', self.x_change, self.y_change)
@@ -312,6 +348,9 @@ class Enemy(pygame.sprite.Sprite):
         self.y_change = 0
         if self.iframe > 0:
             self.iframe -= 1
+        self.internalTick += 1
+        if self.internalTick > 60:
+            self.internalTick = 0
 
     def movement(self):
         dx = self.rect.x - self.game.player.rect.x
@@ -324,11 +363,13 @@ class Enemy(pygame.sprite.Sprite):
                 self.aggro = True
                 self.facing = 'left'
                 self.x_change -= self.data.spd
-            elif (abs(dx) < 128 or self.aggro or self.aggroSummon) and abs(dy) < 48 and self.facing != 'left' and dx < 1:
+            elif (abs(dx) < 128 or self.aggro or self.aggroSummon) and abs(
+                    dy) < 48 and self.facing != 'left' and dx < 1:
                 self.aggro = True
                 self.facing = 'right'
                 self.x_change += self.data.spd
-            elif (abs(dy) < 128 or self.aggro or self.aggroSummon) and abs(dx) < 48 and self.facing != 'down' and dy > 1:
+            elif (abs(dy) < 128 or self.aggro or self.aggroSummon) and abs(
+                    dx) < 48 and self.facing != 'down' and dy > 1:
                 self.aggro = True
                 self.facing = 'up'
                 self.y_change -= self.data.spd
@@ -406,10 +447,13 @@ class Enemy(pygame.sprite.Sprite):
                         self.facing = random.choice(['left', 'right', 'up', 'down'])
         if self.data.ai.lower() == 'watcher1':
             if self.DistanceFromPlayer < 256:
+                if self.aggroTick >= 60:
+                    self.aggroTick = 0
+                    Text(self.game, self.rect.x, self.rect.y - 32, '!', RED, 1, 'alert', self)
+                self.aggroTick += 1
+                self.aggro = True
                 for entity in self.game.enemies:
                     entity.aggroSummon = True
-                if self.DistanceFromPlayer > 256:
-                    self.aggro = False
                 ToMove = PathingDirection(self.rect.x, self.rect.y, self.game.player.rect.x, self.game.player.rect.y)
                 if self.DistanceFromPlayer < 128:
                     if ToMove == [0, 0]:
@@ -458,6 +502,8 @@ class Enemy(pygame.sprite.Sprite):
                         else:
                             self.facing = 'up'
             else:
+                self.aggro = False
+                self.aggroTick = 60
                 self.DistanceFromPlayer = math.sqrt(
                     pow(self.x - self.game.player.x, 2) + pow(self.y - self.game.player.y, 2))
                 if self.facing == 'left':
@@ -488,7 +534,6 @@ class Enemy(pygame.sprite.Sprite):
                         self.max_travel = random.randint(5, 20) * TILESIZE
                         self.movement_loop = 0
                         self.facing = random.choice(['left', 'right', 'up', 'down'])
-
         else:
             if self.facing == 'left':
                 self.x_change -= self.data.spd
@@ -549,36 +594,50 @@ class Enemy(pygame.sprite.Sprite):
 
     def animate(self):
         # print(self.data.sprite[0], self.data.sprite[1])
+        doStop = True
+        if self.data.ai == 'watcher1':
+            if not self.aggro:
+                animation_increment = 0.1
+            else:
+                animation_increment = 0.2
+                doStop = False
+        else:
+            animation_increment = 0.1
+
         if self.facing == "down":
-            if self.y_change == 0:
-                self.image = self.game.enemy_spritesheet.get_sprite(self.data.sprite[0], self.data.sprite[1], self.width, self.height)
+            if self.y_change == 0 and doStop:
+                self.image = self.game.enemy_spritesheet.get_sprite(self.data.sprite[0], self.data.sprite[1],
+                                                                    self.width, self.height)
             else:
                 self.image = self.down_animations[math.floor(self.animation_loop)]
-                self.animation_loop += 0.1
+                self.animation_loop += animation_increment
                 if self.animation_loop >= 3:
                     self.animation_loop = 1
-        if self.facing == "up":
-            if self.y_change == 0:
-                self.image = self.game.enemy_spritesheet.get_sprite(self.data.sprite[0], self.data.sprite[1] + 32, self.width, self.height)
+        elif self.facing == "up":
+            if self.y_change == 0 and doStop:
+                self.image = self.game.enemy_spritesheet.get_sprite(self.data.sprite[0], self.data.sprite[1] + 32,
+                                                                    self.width, self.height)
             else:
                 self.image = self.up_animations[math.floor(self.animation_loop)]
-                self.animation_loop += 0.1
+                self.animation_loop += animation_increment
                 if self.animation_loop >= 3:
                     self.animation_loop = 1
-        if self.facing == "left":
-            if self.x_change == 0:
-                self.image = self.game.enemy_spritesheet.get_sprite(self.data.sprite[0], self.data.sprite[1] + 96, self.width, self.height)
+        elif self.facing == "left":
+            if self.x_change == 0 and doStop:
+                self.image = self.game.enemy_spritesheet.get_sprite(self.data.sprite[0], self.data.sprite[1] + 96,
+                                                                    self.width, self.height)
             else:
                 self.image = self.left_animations[math.floor(self.animation_loop)]
-                self.animation_loop += 0.1
+                self.animation_loop += animation_increment
                 if self.animation_loop >= 3:
                     self.animation_loop = 1
-        if self.facing == "right":
-            if self.x_change == 0:
-                self.image = self.game.enemy_spritesheet.get_sprite(self.data.sprite[0], self.data.sprite[1] + 64, self.width, self.height)
+        elif self.facing == "right":
+            if self.x_change == 0 and doStop:
+                self.image = self.game.enemy_spritesheet.get_sprite(self.data.sprite[0], self.data.sprite[1] + 64,
+                                                                    self.width, self.height)
             else:
                 self.image = self.right_animations[math.floor(self.animation_loop)]
-                self.animation_loop += 0.1
+                self.animation_loop += animation_increment
                 if self.animation_loop >= 3:
                     self.animation_loop = 1
 
@@ -630,6 +689,8 @@ class Text(pygame.sprite.Sprite):
         self.game = game
         self._layer = PLAYER_LAYER - 1
         if Type != 'gui':
+            if Type == 'alert':
+                self._layer -= 1
             self.groups = self.game.all_sprites
         else:
             self.groups = self.game.inventory_background
@@ -652,11 +713,11 @@ class Text(pygame.sprite.Sprite):
         self.internalTick = 0
         self.animation_loop = 0
 
-        if self.type == 'damage' or self.type == 'damageE':
+        if self.type == 'damage' or self.type == 'damageE' or self.type == 'alert':
             self.image = pygame.Surface((self.width * self.size, self.height))
             self.image.set_colorkey(BLACK)
             self.rect = self.image.get_rect()
-            if self.type == 'damageE':
+            if self.type == 'damageE' or self.type == 'alert':
                 self.rect.x = self.Target.x * TILESIZE - (2 + TILESIZE * self.size / 2)
                 self.rect.y = self.Target.y * TILESIZE - TILESIZE
             else:
@@ -685,42 +746,47 @@ class Text(pygame.sprite.Sprite):
             Cx = self.x / 32
             Cy = self.y / 32
 
+            self.textList = self.game.player.data.info()
+            self.textList = [
+                self.textList[0],
+                self.textList[1],
+                self.textList[2],
+                self.textList[3],
+                self.textList[4].info(),
+                self.textList[5][0].info(),
+                self.textList[5][1].info(),
+                self.textList[5][2].info(),
+                self.textList[5][3].info(),
+                self.textList[5][4].info(),
+                self.textList[6],
+                self.textList[7],
+                self.textList[8],
+                self.textList[9],
+                self.textList[10]
+            ]
+
             if self.size == 0:
                 # Player Info General Base Inventory
                 L, W, X, Y, J = 363, 160, 0, 0, 3
-                self.textList = self.game.player.data.info()
-                self.textList = [
-                    self.textList[0],
-                    self.textList[1],
-                    self.textList[2],
-                    self.textList[3],
-                    self.textList[4].info(),
-                    self.textList[5][0].info(),
-                    self.textList[5][1].info(),
-                    self.textList[5][2].info(),
-                    self.textList[5][3].info(),
-                    self.textList[5][4].info(),
-                    self.textList[6],
-                    self.textList[7],
-                    self.textList[8],
-                    self.textList[9],
-                    self.textList[10]
-                ]
             if self.size == 1:
-                # Base inventory Screen
+                # Base Menu Screen
                 L, W, X, Y, J = 520, 560, 5, 8, 3
             elif self.size == 2:
-                # Options Bar 1
+                # Info Bar 1
                 L, W, X, Y, J = 150, 360, 0, 0, 3
             elif self.size == 3:
                 # Money Bar
                 L, W, X, Y, J = 150, 64, 0, 0, 3
             elif self.size == 4:
-                # World Map
+                # Inventory Screen
                 L, W, X, Y, J = 363, 360, 0, 0, 3
             elif self.size == 5:
                 # Some Info
                 L, W, X, Y, J = 150, 126, 0, 0, 3
+            elif self.size == 6:
+                # Item usage confirmation
+                L, W, X, Y, J = 150, 42, 0, 0, 3
+                pass
 
             self.image = pygame.Surface((L, W))
             self.image.fill(FF4WHITE, (X, Y, L - 2 * X, W - 2 * Y))
@@ -747,6 +813,42 @@ class Text(pygame.sprite.Sprite):
                 self.image.blit(
                     self.font.render(('MP: ' + str(self.textList[2]) + '/' + str(self.textList[14][1])), True,
                                      FF4WHITE), pos[5])  # MP
+            elif self.size == 4:
+                pos = [
+                    [50, 10]
+                ]
+                Repeat = []
+                i = 0
+                for element in self.game.player.data.inv:
+                    # print(element)
+                    if element.name not in Repeat:
+                        j = 0
+                        for element2 in self.game.player.data.inv:
+                            if element2.name == element.name:
+                                j += 1
+                        text = str(j) + 'x ' + str(element.name)
+                        self.image.blit(self.font.render(str(i + 1) + ':', True, FF4WHITE), (10, 10 + 16 * i))  # name
+                        # self.image.blit(self.font.render(text, True, FF4WHITE),
+                        # (pos[0][0], pos[0][1] + 16 * i))
+                        text_width, text_height = self.font.size(text)
+                        # print('before', [pos[0][0] + Cx, pos[0][1] + 16 * i + Cy])
+                        Button(pos[0][0] + Cx, pos[0][1] + 16 * i + Cy, text_width, text_height, FF4WHITE, FF4BLUE,
+                               text, 16,
+                               'gui', self.game, str(element.name))
+                        i += 1
+                        Repeat.append(element.name)
+            elif self.size == 6:
+                self.image.blit(self.font.render('Confirm', True, FF4WHITE), [48, 5])
+                text_width, text_height = self.font.size('YES')
+                # self.image.blit(self.font.render('YES', True, FF4WHITE), [20, 21])
+                Button(20 + Cx, 21 + Cy, text_width, text_height, FF4WHITE, FF4BLUE,
+                       'YES', 16,
+                       'gui', self.game, self.game.player.itemToUse)
+                text_width, text_height = self.font.size('NO')
+                # self.image.blit(self.font.render('NO', True, FF4WHITE), [98, 21])
+                Button(98 + Cx, 21 + Cy, text_width, text_height, FF4WHITE, FF4BLUE,
+                       'NO', 16,
+                       'gui', self.game)
 
             self.rect = self.image.get_rect()
             self.rect.x = Cx
@@ -764,20 +866,20 @@ class Text(pygame.sprite.Sprite):
 
     def update(self, text=''):
         self.internalTick += 1
-        if self.type == 'damage' or self.animation_loop >= 1 or self.type == 'damageE':
-            if self.type == 'damageE':
+        if self.type == 'damage' or self.animation_loop >= 1 or self.type == 'damageE' or self.type == 'alert':
+            if self.type == 'damageE' or self.type == 'alert':
                 self.rect.x = self.Target.rect.x - (2 + self.compensation)
                 self.rect.y = self.Target.rect.y - (32 * (self.animation_loop / 36))
             else:
                 self.rect.x = self.game.player.rect.x - (2 + self.compensation)
                 self.rect.y = self.game.player.rect.y - (32 * (self.animation_loop / 36))
             self.image.blit(self.text2, self.text_rect)
-
             if self.animation_loop == 36:
                 self.kill()
             self.animation_loop += 1
         if self.type == 'gui':
-            self.game.screen.blit(self.image, self.rect)
+            if self.size == 6:
+                self.game.screen.blit(self.image, self.rect)
         else:
             # Standard above head text
             self.text = text
@@ -902,8 +1004,14 @@ class Attack(pygame.sprite.Sprite):
                 self.kill()
 
 
-class Button:
-    def __init__(self, x, y, width, height, fg, bg, content, fontsize):
+class Button(pygame.sprite.Sprite):
+    def __init__(self, x, y, width, height, fg, bg, content, fontsize, Type='', Game=None, itemToUse=None):
+        # print(x, y, width, height)
+        if Type == 'gui':
+            self._layer = PLAYER_LAYER - 1
+            self.groups = Game.inventory_background
+            pygame.sprite.Sprite.__init__(self, self.groups)
+            self.game = Game
         self.font = pygame.font.Font('text/arial.ttf', fontsize)
         self.content = content
 
@@ -911,6 +1019,7 @@ class Button:
         self.y = y
         self.width = width
         self.height = height
+        self.itemToUse = itemToUse
 
         self.fg = fg
         self.bg = bg
@@ -925,6 +1034,21 @@ class Button:
         self.text = self.font.render(self.content, True, self.fg)
         self.text_rect = self.text.get_rect(center=(self.width / 2, self.height / 2))
         self.image.blit(self.text, self.text_rect)
+        pygame.image.save(self.image, "image.jpg")
+
+    def update(self):
+        self.game.screen.blit(self.image, self.rect)
+        if self.is_pressed(self.game.mouse_pos, self.game.mouse_pressed):
+            if self.content not in ['YES', 'NO']:
+                self.game.player.itemToUse = self.itemToUse
+                Inventory(self.game, 3)
+            elif self.content == 'YES':
+                self.game.player.useItem(self.game.player.itemToUse)
+                self.game.player.itemToUse = None
+                Inventory(self.game, 1)
+            elif self.content == 'NO':
+                self.game.player.itemToUse = None
+                Inventory(self.game, 1)
 
     def is_pressed(self, pos, pressed):
         if self.rect.collidepoint(pos):
@@ -949,3 +1073,6 @@ def Inventory(self, state):
         # Inventory Options Bar
         Text(self, 425, 48, '', FF4BLUE, 2, 'gui', None)
         Text(self, 425, 405, '', FF4BLUE, 5, 'gui', None)
+    elif state == 3:
+        # Inventory Item Confirmation
+        Text(self, self.mouse_pos[0], self.mouse_pos[1], '', FF4BLUE, 6, 'gui', None)

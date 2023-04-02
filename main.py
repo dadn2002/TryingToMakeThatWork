@@ -14,6 +14,8 @@ class Game:
         # self.font = pygame.font.Font('Arial', 32)
         self.running, self.screenState = True, None
         self.font = pygame.font.Font('text/arial.ttf', 32)
+        self.mouse_pos = pygame.mouse.get_pos()
+        self.mouse_pressed = pygame.mouse.get_pressed()
 
         self.character_spritesheet = Spritesheet('img/character.png')
         self.terrain_spritesheet = Spritesheet('img/terrain.png')
@@ -86,9 +88,9 @@ class Game:
                                 continue
                             # Random Blocks
                             Block(self, j, i)
-                        elif random.randint(0, 100) < 50:
+                        elif random.randint(0, 100) < 3:
                             # Random Enemies
-                            Enemy(self, j, i, 'watcher')
+                            Enemy(self, j, i, 'goblin')
 
     def new(self):
         self.playing = True
@@ -116,32 +118,41 @@ class Game:
                 if self.screenState == INGAME:
                     if event.key == pygame.K_q:
                         if self.player.facing == 'up':
-                            Attack(self, self.player.rect.x, self.player.rect.y - TILESIZE, self.player.data.skl, 'player')
+                            Attack(self, self.player.rect.x, self.player.rect.y - TILESIZE, self.player.data.skl,
+                                   'player')
                         if self.player.facing == 'down':
-                            Attack(self, self.player.rect.x, self.player.rect.y + TILESIZE, self.player.data.skl, 'player')
+                            Attack(self, self.player.rect.x, self.player.rect.y + TILESIZE, self.player.data.skl,
+                                   'player')
                         if self.player.facing == 'left':
-                            Attack(self, self.player.rect.x - TILESIZE, self.player.rect.y, self.player.data.skl, 'player')
+                            Attack(self, self.player.rect.x - TILESIZE, self.player.rect.y, self.player.data.skl,
+                                   'player')
                         if self.player.facing == 'right':
-                            Attack(self, self.player.rect.x + TILESIZE, self.player.rect.y, self.player.data.skl, 'player')
+                            Attack(self, self.player.rect.x + TILESIZE, self.player.rect.y, self.player.data.skl,
+                                   'player')
                     elif event.key == pygame.K_e:
                         Inventory(self, 1)
                         self.screenState = INVENTORY
                 elif self.screenState == INVENTORY:
                     if event.key == pygame.K_e:
+                        temp = len(self.inventory_background.sprites())
                         for sprite in self.inventory_background:
                             sprite.kill()
-                        self.screenState = INGAME
+                        if temp >= 4:
+                            # The basic amount of sprites in inventory, close inventory
+                            self.screenState = INGAME
+                        else:
+                            # Close anothers tabs
+                            Inventory(self, 1)
+                    elif event.key == pygame.K_i:
+                        pass
                     elif event.key == pygame.K_1:
-                        Inventory(self, 1)
                         pass
                     elif event.key == pygame.K_2:
-                        Inventory(self, 2)
-                        pass
-                    elif event.key == pygame.K_3:
-                        Inventory(self, 3)
                         pass
 
     def update(self):
+        self.mouse_pos = pygame.mouse.get_pos()
+        self.mouse_pressed = pygame.mouse.get_pressed()
         if self.screenState == INGAME:
             self.all_sprites.update()
         elif self.screenState == INVENTORY:

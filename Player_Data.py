@@ -40,7 +40,8 @@ class DataPlayer:
         for element in self.arm:
             self.totalArmour += element.damRed
         self.Pos = [PlayerDataFromExcel[0][10], PlayerDataFromExcel[0][11], PlayerDataFromExcel[0][12]]
-        self.inv = PlayerDataFromExcel[0][13]
+        for element in PlayerDataFromExcel[0][13]:
+            self.inv.append(Item(element))
         self.lvl = PlayerDataFromExcel[0][14]
         self.maxhpmp = PlayerDataFromExcel[0][15]
 
@@ -141,9 +142,9 @@ class Skills:
 
 
 PlayerDataFromExcel = [
-    # Name, Hp, Mp, Speed, Wpn1, Wpn2, Helmet, Chest, Leggings, Boots, WorldPosX, WorldPosY, WorldDirection, Inv
-    ['Belmont', 100, 0, 3, 'sword', 'Leather Shield', 'Leather Helmet', 'Leather Chest', 'Leather Leggings',
-     'Leather Boots', 0, 0, 1, ['bananas', 'uvas', 'maças', 'peras', 'abacaxis'], 1, [100, 0]]
+    # Name, Hp, Mp, Speed, Wpn1, Wpn2, Helmet, Chest, Leggings, Boots, WorldPosX, WorldPosY, WorldDirection, Inv, Lvl, MaxHpMp
+    ['Belmont', 80, 0, 3, 'sword', 'Leather Shield', 'Leather Helmet', 'Leather Chest', 'Leather Leggings',
+     'Leather Boots', 0, 0, 1, ['tonic1', 'tonic1', 'elixir1'], 1, [100, 10]]
 ]
 
 EnemyDataFromExcel = [
@@ -153,7 +154,6 @@ EnemyDataFromExcel = [
     ['bandit', 20, 0, 1, ['contact1', 'slash1'], 3, [], 20, 5, ['tonic'], ['plains'], 5, 'zombie1', [102, 2]],
     ['watcher', 10, 0, 1, ['contact0'], -5, [''], 0, 5, ['tonic'], ['plains'], 5, 'watcher1', [201, 2]],
 ]
-
 
 SkillsDataFromExcel = [
     # name, dam, range, type, elements, stun, poison, slow, curse
