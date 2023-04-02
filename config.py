@@ -5,19 +5,23 @@ FPS = 60
 PAUSE, INGAME, INVENTORY, SHOP = -1, 0, 1, 2
 FIXEDCAM = True
 
+GUI_LAYER = 5
 PLAYER_LAYER = 4
 ENEMY_LAYER = 3
 BLOCK_LAYER = 2
 GROUND_LAYER = 1
 
-PLAYER_SPEED = 3
-ENEMY_SPEED = 2
+GLOBAL_SPEED = 10
+# 10ig = 2rs, 20ig =
 
 WHITE = (255, 255, 255)
 RED = (255, 0, 0)
 GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
 BLACK = (0, 0, 0)
+FF4BLUE = (2, 0, 106)
+FF4DARKWHITE = (55, 55, 55)
+FF4WHITE = (202, 203, 220)
 
 tilemap = [
     'BBBBBBBBBBBBBBBBBBBB',
@@ -42,11 +46,14 @@ tilemap = [
     'BBBBBBBBBBBBBBBBBBBB',
 ]
 WorldMapExits = 1
-"""
-    L = 16
-    WorldMap = [[0]*L]*L
-    for i in range(len(WorldMap)):
-        for j in range(len(WorldMap[0])):
-            WorldMap[i][j] = random.randint(5, 15)
-    print(WorldMap)
-"""
+
+WorldMap = [
+    [1, 1, 1, 1, 1, 1, 1, 1],
+    [1, 2, 1, 1, 2, 1, 1, 1],
+    [1, 1, 2, 1, 2, 1, 2, 2],
+    [1, 1, 2, 1, 1, 1, 1, 1],
+    [1, 2, 2, 2, 1, 1, 1, 1],
+    [1, 1, 1, 2, 1, 2, 2, 2],
+    [1, 1, 1, 1, 1, 1, 1, 2],
+    [1, 1, 1, 1, 1, 1, 1, 1],
+]

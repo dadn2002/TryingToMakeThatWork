@@ -5,24 +5,23 @@ class Weapon:
         self.dam = dam
         self.ran = ran
         self.elements = elements
-
-        for element in ListOfWeapons:
-            if self.name == element[0].lower():
-                self.dam = element[1]
-                self.ran = element[2]
-                self.elements = element[3]
-                RaiseError = False
-                break
-        if RaiseError:
-            self.name = None
+        self.update()
         # print(self.name, self.dam, self.ran, self.elements)
 
     def update(self):
         for element in ListOfWeapons:
             if self.name == element[0].lower():
-                self.dam = element[1]
-                self.ran = element[2]
+                self.dam = int(element[1])
+                self.ran = int(element[2])
                 self.elements = element[3]
+
+    def info(self):
+        return [
+            self.name,
+            self.dam,
+            self.ran,
+            self.elements,
+        ]
 
 
 class Armour:
@@ -35,7 +34,7 @@ class Armour:
         for element in ListOfArmours:
             if self.name == element[0].lower():
                 self.damRed = element[1]
-                self.ranType = element[2]
+                self.Type = element[2]
                 RaiseError = False
                 break
         if RaiseError:
@@ -46,7 +45,14 @@ class Armour:
         for element in ListOfWeapons:
             if self.name == element[0].lower():
                 self.damRed = element[1]
-                self.ranType = element[2]
+                self.Type = element[2]
+
+    def info(self):
+        return [
+            self.name,
+            self.damRed,
+            self.Type,
+        ]
 
 
 ListOfWeapons = [
@@ -58,9 +64,9 @@ ListOfWeapons = [
 ]
 ListOfArmours = [
     # Name, Dam Red, Type S/H/C/L/B
-    ['Leather Shield', 2, 'S'],
-    ['Leather Helmet', 2, 'S'],
-    ['Leather Chest', 2, 'S'],
-    ['Leather Leggings', 2, 'S'],
-    ['Leather Boots', 2, 'S'],
+    ['Leather Shield', 1, 'S'],
+    ['Leather Helmet', 1, 'S'],
+    ['Leather Chest', 1, 'S'],
+    ['Leather Leggings', 1, 'S'],
+    ['Leather Boots', 1, 'S'],
 ]

@@ -17,8 +17,9 @@ class Game:
 
         self.character_spritesheet = Spritesheet('img/character.png')
         self.terrain_spritesheet = Spritesheet('img/terrain.png')
-        self.enemy_spritesheet = Spritesheet('img/enemy.png')
+        self.enemy_spritesheet = Spritesheet('img/enemies.png')
         self.attack_spritesheet = Spritesheet('img/attack.png')
+        self.inventory_spritesheet = Spritesheet('img/SOLID COLORS.png')
         self.intro_background = pygame.image.load('img/introbackground.png')
         self.go_background = pygame.image.load('img/gameover.png')
 
@@ -61,7 +62,7 @@ class Game:
                     elif column == 'P':
                         self.player = Player(self, j, i)
                     elif column == 'E':
-                        Enemy(self, j, i)
+                        Enemy(self, j, i, 'goblin')
                 else:
                     if j == PlayerSpawn[0] and i == PlayerSpawn[1]:
                         # Does not put blocks on Player
@@ -85,18 +86,19 @@ class Game:
                                 continue
                             # Random Blocks
                             Block(self, j, i)
-                        if random.randint(0, 100) < 5:
+                        elif random.randint(0, 100) < 50:
                             # Random Enemies
-                            Enemy(self, j, i)
+                            Enemy(self, j, i, 'watcher')
 
     def new(self):
         self.playing = True
         self.tick = 0
 
+        self.inventory_background = pygame.sprite.LayeredUpdates()
         self.all_sprites = pygame.sprite.LayeredUpdates()
         self.blocks = pygame.sprite.LayeredUpdates()
+        self.playerSprites = pygame.sprite.LayeredUpdates()
         self.enemies = pygame.sprite.LayeredUpdates()
-        self.gui = pygame.sprite.LayeredUpdates()
         self.attacks = pygame.sprite.LayeredUpdates()
 
         self.createTileMap(cardinality=random.randint(1, 4))
@@ -109,35 +111,61 @@ class Game:
                 self.playing = False
 
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_q:
-                    if self.player.facing == 'up':
-                        Attack(self, self.player.rect.x, self.player.rect.y - TILESIZE, self.player.data.skl[0])
-                    if self.player.facing == 'down':
-                        Attack(self, self.player.rect.x, self.player.rect.y + TILESIZE, self.player.data.skl[0])
-                    if self.player.facing == 'left':
-                        Attack(self, self.player.rect.x - TILESIZE, self.player.rect.y, self.player.data.skl[0])
-                    if self.player.facing == 'right':
-                        Attack(self, self.player.rect.x + TILESIZE, self.player.rect.y, self.player.data.skl[0])
-                if event.key == pygame.K_i:
-                    if self.screenState == INVENTORY:
-                        self.screenState = INGAME
-                    else:
+                if event.key == pygame.K_x:
+                    print(self.player.data.inv)
+                if self.screenState == INGAME:
+                    if event.key == pygame.K_q:
+                        if self.player.facing == 'up':
+                            Attack(self, self.player.rect.x, self.player.rect.y - TILESIZE, self.player.data.skl, 'player')
+                        if self.player.facing == 'down':
+                            Attack(self, self.player.rect.x, self.player.rect.y + TILESIZE, self.player.data.skl, 'player')
+                        if self.player.facing == 'left':
+                            Attack(self, self.player.rect.x - TILESIZE, self.player.rect.y, self.player.data.skl, 'player')
+                        if self.player.facing == 'right':
+                            Attack(self, self.player.rect.x + TILESIZE, self.player.rect.y, self.player.data.skl, 'player')
+                    elif event.key == pygame.K_e:
+                        Inventory(self, 1)
                         self.screenState = INVENTORY
+                elif self.screenState == INVENTORY:
+                    if event.key == pygame.K_e:
+                        for sprite in self.inventory_background:
+                            sprite.kill()
+                        self.screenState = INGAME
+                    elif event.key == pygame.K_1:
+                        Inventory(self, 1)
+                        pass
+                    elif event.key == pygame.K_2:
+                        Inventory(self, 2)
+                        pass
+                    elif event.key == pygame.K_3:
+                        Inventory(self, 3)
+                        pass
 
     def update(self):
         if self.screenState == INGAME:
             self.all_sprites.update()
         elif self.screenState == INVENTORY:
-            self.gui.update()
+            self.inventory_background.update()
 
     def draw(self):
-        self.screen.fill(BLACK)
+        # Draw sprites
         self.clock.tick(FPS)
         if self.screenState == INGAME:
+            self.screen.fill(BLACK)
             self.all_sprites.draw(self.screen)
         elif self.screenState == INVENTORY:
-            self.gui.draw(self.screen)
+            # self.draw_text("Inventory", self.font, WHITE, WIN_WIDTH / 2, WIN_HEIGTH / 2)
+            # print('draw')
+            self.inventory_background.draw(self.screen)
+            for i in range(len(self.player.data.inv)):
+                # self.draw_text(self.player.data.inv[i], self.font, WHITE, 0, i * TILESIZE)
+                pass
         pygame.display.update()
+
+    def draw_text(self, text, font, text_col, x, y):
+        # Draw text
+        img = font.render(text, True, text_col)
+        self.screen.blit(img, (x, y))
 
     def main(self):
         # game loop
@@ -196,45 +224,6 @@ class Game:
             self.screen.blit(play_button.image, play_button.rect)
             self.clock.tick(FPS)
             pygame.display.update()
-
-
-class State:
-    def __init__(self, game):
-        self.game = game
-        self.prev_state = None
-
-    def update(self, delta_time, actions):
-        pass
-
-    def render(self, surface):
-        pass
-
-    def enter_state(self):
-        if len(self.game.state_stack) > 1:
-            self.prev_state = self.game.state_stack[-1]
-        self.game.state_stack.append(self)
-
-    def exit_state(self):
-        self.game.state_stack.pop()
-
-
-class PauseMenu(State):
-    def __init__(self, game):
-        self.game = game
-        State.__init__(self, game)
-        # Set the menu
-        self.menu_img = pygame.Surface([256, 256])
-        self.menu_rect = self.menu_img.get_rect()
-        self.menu_rect.center = (128, 128)
-
-    def update(self, delta_time, actions):
-        if actions["action2"]:
-            self.exit_state()
-        self.game.reset_keys()
-
-    def render(self, display):
-        self.prev_state.render(display)
-        display.blit(self.menu_img, self.menu_rect)
 
 
 # print(pygame.font.get_fonts())
