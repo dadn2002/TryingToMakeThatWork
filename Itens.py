@@ -4,7 +4,7 @@ class Weapon:
         self.name = name.lower()
         self.dam = dam
         self.ran = ran
-        self.elements = elements
+        self.tags = elements
         self.update()
         # print(self.name, self.dam, self.ran, self.elements)
 
@@ -13,14 +13,14 @@ class Weapon:
             if self.name == element[0].lower():
                 self.dam = int(element[1])
                 self.ran = int(element[2])
-                self.elements = element[3]
+                self.tags = element[3]
 
     def info(self):
         return [
             self.name,
             self.dam,
             self.ran,
-            self.elements,
+            self.tags,
         ]
 
 
@@ -76,12 +76,21 @@ class Item:
         return [self.name, self.price, self.tags]
 
 
+def isConsumable(name):
+    consumable = ['hp', 'mp']
+    for element in Item(name).tags:
+        if element[0] in consumable:
+            return True
+    return False
+
+
 ListOfWeapons = [
-    # Name, Dam, Range, Element
-    ['fist', 2, 5, 'none'],
-    ['stick', 4, 5, 'none'],
-    ['sword', 5, 5, 'none'],
-    ['stone', 10, 5, 'none'],
+    # Name, Dam, Range, Tags (Elements, projectile, are, etc)
+    ['fist', 2, 1, ['phy']],
+    ['stick', 4, 1, ['phy']],
+    ['sword', 999, 2, ['phy']],
+    ['stone', 10, 1, ['phy']],
+    ['staff', 5, 2, ['mag']],
 ]
 ListOfArmours = [
     # Name, Dam Red, Type S/H/C/L/B
@@ -92,7 +101,10 @@ ListOfArmours = [
     ['Leather Boots', 1, 'S'],
 ]
 ListOfItens = [
-    # Name, price, Tags: ['hp', value], ['mp', value],
+    # Name, price, Tags: ['hp', value], ['mp', value], ['keytype', tier],
     ['tonic1', 5, ['hp', 20]],
-    ['elixir1', 40, ['hp', 50], ['mp', 20]]
+    ['tonic2', 50, ['hp', 100]],
+    ['ether1', 5, ['mp', 10]],
+    ['elixir1', 40, ['hp', 50], ['mp', 20]],
+    ['key', 5, ['undead', 1]],
 ]
