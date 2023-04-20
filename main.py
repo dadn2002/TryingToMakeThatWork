@@ -4,6 +4,7 @@ import pygame
 
 from sprites import *
 from config import *
+from Maps import *
 import sys
 
 
@@ -17,30 +18,32 @@ class Game:
         self.gameState = 0
         self.party = []
 
-        self.character_spritesheet = Spritesheet('img/characters.png')
+        self.character_spritesheet = Spritesheet('img/character.png')
+        self.playableNpcs_spritesheet = Spritesheet('img/playable_npcs.png')
         self.creatures_spritesheet = Spritesheet('img/creatures1.png')
+        self.castleTiles_spritesheet = Spritesheet('img/CastleTiles.png')
         self.backgrounds_spritesheet = Spritesheet('img/battle_backgrounds.png')
-        self.terrain_spritesheet = Spritesheet('img/terrain.png')
+        self.map_spritesheet = Spritesheet('img/DomaCastleExterior.png')
 
     def createMap(self):
-        for i, row in enumerate(tilemap):
-            for j, column in enumerate(row):
-                Ground(self, j, i)
-                if column == 'B':
-                    Block(self, j, i)
-                if column == 'P':
-                    self.player = Player(self, j, i, 'Belmont', render=True)
-                    self.party.append(self.player)
-        for sprite in self.all_sprites:
-            sprite.rect.x += 320 - self.player.rect.x - 16
-            sprite.rect.y += 320 - self.player.rect.y - 16
+        self.zeroCoord = Block(self, 0, 0, 32, 32, hasHitBox=False)
+        # self.map = BackgroundMap(self, 0, 0, 'DomaCastle')
+        self.player = Player(self, 8, 7, 'Belmont', render=True)  # 33, 52
+        self.party.append(self.player)
+        GenerateMap(self, 'domacastle')
+        if FIXEDCAM:
+            valueToIncrease = [self.player.rect.x, self.player.rect.y]
+            for sprite in self.all_sprites:
+                sprite.rect.x += 320 - valueToIncrease[0] - 16
+                sprite.rect.y += 320 - valueToIncrease[1] - 16
 
     def new(self):
         self.gameState = 1
 
         self.all_sprites = pygame.sprite.LayeredUpdates()
         self.blocks = pygame.sprite.LayeredUpdates()
-        self.npc = pygame.sprite.LayeredUpdates()
+        self.objects = pygame.sprite.LayeredUpdates()
+        self.npc_sprites = pygame.sprite.LayeredUpdates()
         self.enemies = pygame.sprite.LayeredUpdates()
         self.animations = pygame.sprite.LayeredUpdates()
         self.gui_sprites = pygame.sprite.LayeredUpdates()
@@ -55,12 +58,15 @@ class Game:
             if event.type == pygame.QUIT:
                 self.running = False
                 self.gameState = -1
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_x:
+                    print(self.blocks, self.all_sprites)
             if self.gameState == 1:
                 # Main game running
                 if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_e:
+                    if event.key == pygame.K_i:
                         self.gameState = 2
-                        Inventory(self, 1)
+                        Inventory(self)
                     if event.key == pygame.K_r:
                         self.gameState = 3
                         BattleScene(self, self.party, 'plains', 0)
@@ -71,6 +77,11 @@ class Game:
                         self.gameState = 1
                         for sprite in self.gui_sprites:
                             sprite.kill()
+                    for s in self.keyboardcheck:
+                        s.check_click(event.key)
+                elif event.type == pygame.MOUSEBUTTONUP:
+                    for s in self.mousecheck:
+                        s.check_click(event.pos)
             if self.gameState == 3:
                 # Battle instance
                 if event.type == pygame.KEYDOWN:
@@ -82,7 +93,6 @@ class Game:
 
     def update(self):
         if self.gameState == 1:
-            pygame.mixer.music.stop()
             self.mouse_pos = pygame.mouse.get_pos()
             self.mouse_pressed = pygame.mouse.get_pressed()
             self.all_sprites.update()
@@ -97,6 +107,13 @@ class Game:
 
     def draw(self):
         if self.gameState == 1:
+            if FIXEDCAM:
+                # My man in stupid as shit, save the increment before messing with everything else
+                valueToIncrease = [self.player.rect.x, self.player.rect.y]
+                for sprite in self.all_sprites:
+                    # New centering camera method, solved issues with random width/height blocks
+                    sprite.rect.x += 304 - valueToIncrease[0]
+                    sprite.rect.y += 304 - valueToIncrease[1]
             self.screen.fill(BLACK)
             self.all_sprites.draw(self.screen)
         elif self.gameState == 2:

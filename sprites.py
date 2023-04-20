@@ -6,6 +6,7 @@ from config import *
 from Player_Data import *
 from Itens import *
 from zones import *
+from TileData import *
 
 
 class Spritesheet:
@@ -21,24 +22,30 @@ class Spritesheet:
 
 class Player(pygame.sprite.Sprite):
     def __init__(self, game, x, y, name='', render=False):
-
         self.game = game
 
         self.x = x * TILESIZE
-        self.y = y * TILESIZE
+        self.y = y * TILESIZE - 16
         self.render = render
         self.x_change = 0
         self.y_change = 0
+        self.walkTick = 0
         self.data = DataPlayer(name)
         self.facing = 'down'
+        self.interact_timer = 0
         self.animation_loop = 1
         self.itemToUse = None
-        self.width = 20
-        self.height = 38
+        self.confirmTeleport = None
 
-        self.image = self.game.character_spritesheet.get_sprite(6, 2, self.width, self.height)
+        self.width = self.data.sprite[2]
+        self.height = self.data.sprite[3]
+        self.image = pygame.transform.scale(
+            self.game.playableNpcs_spritesheet.get_sprite(self.data.sprite[0] + 60, self.data.sprite[1], self.width,
+                                                          self.height), (self.width * 2, self.height * 2))
         self.imagebattle = self.image
         self.rect = self.image.get_rect()
+        self.hitbox = self.rect.inflate(0, -16).copy()
+        self.hitbox.y = self.rect.y + 16
         if self.render:
             self._layer = PLAYER_LAYER
             self.groups = self.game.all_sprites
@@ -51,80 +58,161 @@ class Player(pygame.sprite.Sprite):
 
     def update(self):
         if self.render:
-            self.movement()
+            if self.interact_timer > 0:
+                self.interact_timer -= 1
+            if self.x_change == 0 and self.y_change == 0:
+                self.movement()
             self.animate()
 
-            self.rect.x += self.x_change
+            if self.x_change != 0:
+                self.rect.x += self.x_change / abs(self.x_change) * PLAYER_SPEED
             self.collide_blocks('x')
-            self.rect.y += self.y_change
+            if self.y_change != 0:
+                self.rect.y += self.y_change / abs(self.y_change) * PLAYER_SPEED
             self.collide_blocks('y')
-            self.x_change = 0
-            self.y_change = 0
+            self.collide_npcs()
+
+            if self.x_change != 0:
+                self.x_change += -self.x_change / abs(self.x_change) * PLAYER_SPEED
+            elif self.y_change != 0:
+                self.y_change += -self.y_change / abs(self.y_change) * PLAYER_SPEED
 
     def movement(self):
         keys = pygame.key.get_pressed()
         if keys[pygame.K_s]:
-            self.y_change += 1
+            self.y_change = GLOBAL_SPEED
             self.facing = 'down'
-            for sprite in self.game.all_sprites:
-                sprite.rect.y -= 1
+            # for sprite in self.game.all_sprites:
+            #     sprite.rect.y -= PLAYER_SPEED
         elif keys[pygame.K_w]:
-            self.y_change -= 1
+            self.y_change = - GLOBAL_SPEED
             self.facing = 'up'
-            for sprite in self.game.all_sprites:
-                sprite.rect.y += 1
+            # for sprite in self.game.all_sprites:
+            #     sprite.rect.y += PLAYER_SPEED
         elif keys[pygame.K_a]:
-            self.x_change -= 1
+            self.x_change = - GLOBAL_SPEED
             self.facing = 'left'
-            for sprite in self.game.all_sprites:
-                sprite.rect.x += 1
+            # for sprite in self.game.all_sprites:
+            #     sprite.rect.x += PLAYER_SPEED
         elif keys[pygame.K_d]:
-            self.x_change += 1
+            self.x_change = GLOBAL_SPEED
             self.facing = 'right'
-            for sprite in self.game.all_sprites:
-                sprite.rect.x -= 1
+            # for sprite in self.game.all_sprites:
+            #     sprite.rect.x -= PLAYER_SPEED
+        if keys[pygame.K_e]:
+            if self.interact_timer == 0:
+                self.interact_timer = 30
+                if self.confirmTeleport:
+                    self.rect.x = self.confirmTeleport[0]
+                    self.rect.y = self.confirmTeleport[1]
+                    print('Zoned to', self.confirmTeleport)
+                    pygame.mixer.Sound.play(pygame.mixer.Sound("ost/dooropening.wav"))
+                    self.confirmTeleport = None
+        self.confirmTeleport = None
 
     def collide_blocks(self, direction):
-        if direction == 'x':
-            hits = pygame.sprite.spritecollide(self, self.game.blocks, False)
-            if hits:
+        self.hitbox = self.rect.inflate(0, -16).copy()
+        self.hitbox.y = self.rect.y + 16
+        hits = pygame.sprite.spritecollide(self, self.game.blocks, False, collided)
+        hits1 = pygame.sprite.spritecollide(self, self.game.objects, False, collided)
+        if hits:
+            if direction == 'x':
                 if self.x_change > 0:
                     self.rect.x = hits[0].rect.left - self.rect.width
-                    for sprite in self.game.all_sprites:
-                        sprite.rect.x += 1
                 if self.x_change < 0:
-                    self.rect.x = hits[0].rect.right
-                    for sprite in self.game.all_sprites:
-                        sprite.rect.x -= 1
-        if direction == 'y':
-            hits = pygame.sprite.spritecollide(self, self.game.blocks, False)
-            if hits:
+                    self.rect.x = hits[0].rect.right - (self.rect.width - self.hitbox.width)
+                self.x_change = 0
+            if direction == 'y':
                 if self.y_change > 0:
                     self.rect.y = hits[0].rect.top - self.rect.height
-                    for sprite in self.game.all_sprites:
-                        sprite.rect.y += 1
                 if self.y_change < 0:
-                    self.rect.y = hits[0].rect.bottom
-                    for sprite in self.game.all_sprites:
-                        sprite.rect.y -= 1
+                    self.rect.y = hits[0].rect.bottom - (self.rect.height - self.hitbox.height)
+                self.y_change = 0
+        if hits1:
+            if hits1[0].type == 'chest':
+                if hits1[0].content and (self.data.checkInv('key') or hits1[0].state == 1):
+                    if hits1[0].state == 0:
+                        pygame.mixer.Sound.play(pygame.mixer.Sound("ost/chestopening.wav"))
+                        self.data.removeFromInv('key')
+                    for item in hits1[0].content:
+                        self.data.addToInv(item)
+                    AlertText(self.game, 'Chest Open', self.rect.x - 8, self.rect.y - 32, YELLOW, 'info')
+                    hits1[0].content = []
+                    hits1[0].state = 1
+            if hits1[0].type == 'warptile':
+                self.confirmTeleport = [hits1[0].content[0] + self.game.zeroCoord.rect.x,
+                                        hits1[0].content[1] + self.game.zeroCoord.rect.y - 16]
+            elif direction == 'x':
+                if hits1:
+                    if self.x_change > 0:
+                        self.rect.x = hits1[0].rect.left - self.rect.width
+                    if self.x_change < 0:
+                        self.rect.x = hits1[0].rect.right - (self.rect.width - self.hitbox.width)
+                    self.x_change = 0
+            elif direction == 'y':
+                if hits1:
+                    if self.y_change > 0:
+                        self.rect.y = hits1[0].rect.top - self.rect.height
+                    if self.y_change < 0:
+                        self.rect.y = hits1[0].rect.bottom - (self.rect.height - self.hitbox.height)
+                    self.y_change = 0
+
+    def collide_npcs(self):
+        self.hitbox = self.rect.inflate(0, -16).copy()
+        self.hitbox.y = self.rect.y + 16
+        hits = pygame.sprite.spritecollide(self, self.game.npc_sprites, False, collided)
+        if hits:
+            if hits[0].data.hasHitBox:
+                if hits[0].data.textBox:
+                    missionList = []
+                    for text in hits[0].data.textBox:
+                        print(text, self.data.missions)
+                        if text[0].lower() == 'mission' and text[1] not in self.data.missions:
+                            missionList.append(text[1])
+                    if missionList:
+                        AlertText(self.game, 'New Mission', self.rect.x, self.rect.y - 32, BLUE, 'info')
+                        pygame.mixer.Sound.play(pygame.mixer.Sound("ost/received_something.wav"))
+                    self.data.missions += missionList
+                    # print(self.data.missions)
+                if self.x_change > 0:
+                    self.rect.x = hits[0].rect.left - self.rect.width
+                if self.x_change < 0:
+                    self.rect.x = hits[0].rect.right - (self.rect.width - self.hitbox.width)
+                if self.y_change > 0:
+                    self.rect.y = hits[0].rect.top - self.rect.height
+                if self.y_change < 0:
+                    self.rect.y = hits[0].rect.bottom - (self.rect.height - self.hitbox.height)
+                self.x_change = 0
+                self.y_change = 0
 
     def animate(self):
-        down_animations = [self.game.character_spritesheet.get_sprite(3, 2, self.width, self.height),
-                           self.game.character_spritesheet.get_sprite(35, 2, self.width, self.height),
-                           self.game.character_spritesheet.get_sprite(68, 2, self.width, self.height)]
-        up_animations = [self.game.character_spritesheet.get_sprite(3, 34, self.width, self.height),
-                         self.game.character_spritesheet.get_sprite(35, 34, self.width, self.height),
-                         self.game.character_spritesheet.get_sprite(68, 34, self.width, self.height)]
-        left_animations = [self.game.character_spritesheet.get_sprite(3, 98, self.width, self.height),
-                           self.game.character_spritesheet.get_sprite(35, 98, self.width, self.height),
-                           self.game.character_spritesheet.get_sprite(68, 98, self.width, self.height)]
-        right_animations = [self.game.character_spritesheet.get_sprite(3, 66, self.width, self.height),
-                            self.game.character_spritesheet.get_sprite(35, 66, self.width, self.height),
-                            self.game.character_spritesheet.get_sprite(68, 66, self.width, self.height)]
+        coord = self.data.sprite
+        down_animations = [self.game.playableNpcs_spritesheet.get_sprite(coord[0], coord[1], self.width, self.height),
+                           self.game.playableNpcs_spritesheet.get_sprite(coord[0], coord[1] + 30, self.width,
+                                                                         self.height),
+                           self.game.playableNpcs_spritesheet.get_sprite(coord[0], coord[1] + 60, self.width,
+                                                                         self.height)]
+        up_animations = [
+            self.game.playableNpcs_spritesheet.get_sprite(coord[0] + 30, coord[1], self.width, self.height),
+            self.game.playableNpcs_spritesheet.get_sprite(coord[0] + 30, coord[1] + 30, self.width,
+                                                          self.height),
+            self.game.playableNpcs_spritesheet.get_sprite(coord[0] + 30, coord[1] + 60, self.width,
+                                                          self.height)]
+        left_animations = [
+            self.game.playableNpcs_spritesheet.get_sprite(coord[0] + 60, coord[1], self.width, self.height),
+            self.game.playableNpcs_spritesheet.get_sprite(coord[0] + 60, coord[1] + 30, self.width,
+                                                          self.height),
+            self.game.playableNpcs_spritesheet.get_sprite(coord[0] + 60, coord[1] + 60, self.width,
+                                                          self.height)]
+        right_animations = [
+            self.game.playableNpcs_spritesheet.get_sprite(coord[0] + 90, coord[1], self.width, self.height),
+            self.game.playableNpcs_spritesheet.get_sprite(coord[0] + 90, coord[1] + 30, self.width, self.height),
+            self.game.playableNpcs_spritesheet.get_sprite(coord[0] + 90, coord[1] + 60, self.width, self.height)]
 
         if self.facing == 'down':
             if self.y_change == 0:
-                self.image = self.game.character_spritesheet.get_sprite(3, 2, self.width, self.height)
+                self.image = self.game.playableNpcs_spritesheet.get_sprite(coord[0], coord[1], self.width,
+                                                                           self.height)
             else:
                 self.image = down_animations[math.floor(self.animation_loop)]
                 self.animation_loop += 0.1
@@ -132,7 +220,8 @@ class Player(pygame.sprite.Sprite):
                     self.animation_loop = 1
         if self.facing == 'up':
             if self.y_change == 0:
-                self.image = self.game.character_spritesheet.get_sprite(3, 34, self.width, self.height)
+                self.image = self.game.playableNpcs_spritesheet.get_sprite(coord[0] + 30, coord[1], self.width,
+                                                                           self.height)
             else:
                 self.image = up_animations[math.floor(self.animation_loop)]
                 self.animation_loop += 0.1
@@ -140,7 +229,8 @@ class Player(pygame.sprite.Sprite):
                     self.animation_loop = 1
         if self.facing == 'left':
             if self.x_change == 0:
-                self.image = self.game.character_spritesheet.get_sprite(3, 98, self.width, self.height)
+                self.image = self.game.playableNpcs_spritesheet.get_sprite(coord[0] + 60, coord[1], self.width,
+                                                                           self.height)
             else:
                 self.image = left_animations[math.floor(self.animation_loop)]
                 self.animation_loop += 0.1
@@ -148,12 +238,14 @@ class Player(pygame.sprite.Sprite):
                     self.animation_loop = 1
         if self.facing == 'right':
             if self.x_change == 0:
-                self.image = self.game.character_spritesheet.get_sprite(3, 66, self.width, self.height)
+                self.image = self.game.playableNpcs_spritesheet.get_sprite(coord[0] + 90, coord[1], self.width,
+                                                                           self.height)
             else:
                 self.image = right_animations[math.floor(self.animation_loop)]
                 self.animation_loop += 0.1
                 if self.animation_loop >= 3:
                     self.animation_loop = 1
+        self.image = pygame.transform.scale(self.image, (self.width * 2, self.height * 2))
 
     def useItem(self, itemName, alertPos=None):
         for i in range(len(self.data.inv)):
@@ -183,130 +275,186 @@ class Player(pygame.sprite.Sprite):
 
 
 class Npc(pygame.sprite.Sprite):
-    def __init__(self, game, x, y, name=''):
-
+    def __init__(self, game, x, y, map, name='guard'):
         self.game = game
         self._layer = PLAYER_LAYER
-        self.groups = self.game.all_sprites
+        self.groups = self.game.all_sprites, self.game.npc_sprites
         pygame.sprite.Sprite.__init__(self, self.groups)
 
-        self.x = x * TILESIZE
-        self.y = y * TILESIZE
-        self.width = TILESIZE
-        self.height = TILESIZE
+        self.name = name
+        self.map = map
+        self.data = DataNpc(self.name, map=self.map)
+        self.x = x
+        self.y = y
         self.x_change = 0
         self.y_change = 0
-        self.data = DataPlayer('')
         self.facing = 'down'
         self.animation_loop = 1
+        self.movementTick = 0
+        self.internalTick = 0
+        if self.data.holdPosition:
+            self.x = self.data.holdPosition[0]
+            self.y = self.data.holdPosition[1]
+            self.facing = self.data.holdPosition[1]
+        self.width = self.data.sprite[2]
+        self.height = self.data.sprite[3]
 
-        self.image = self.game.character_spritesheet.get_sprite(38, 2, self.width, self.height)
+        self.image = pygame.transform.scale(
+            self.game.playableNpcs_spritesheet.get_sprite(self.data.sprite[0], self.data.sprite[1], self.width,
+                                                          self.height), (self.width * 2, self.height * 2))
 
         self.rect = self.image.get_rect()
         self.rect.x = self.x
         self.rect.y = self.y
+        self.hitbox = self.rect.inflate(0, -16).copy()
+        self.hitbox.y += 16
 
     def update(self):
-        self.movement()
-        self.animate()
-
-        self.rect.x += self.x_change
+        if self.internalTick > 0:
+            self.internalTick -= 1
+        if self.internalTick == 0:
+            self.internalTick = 60
+        if self.internalTick % 3 == 0:
+            self.movement()
+            self.animate()
+        # pygame.draw.rect(self.image, PURPLE, (0, 16, self.hitbox.width, self.hitbox.height))
+        if self.data.holdPosition:
+            self.x_change = 0
+            self.y_change = 0
+        if self.x_change != 0:
+            self.rect.x += self.x_change / abs(self.x_change) * 1
         self.collide_blocks('x')
-        self.rect.y += self.y_change
+        if self.y_change != 0:
+            self.rect.y += self.y_change / abs(self.y_change) * 1
         self.collide_blocks('y')
-        self.x_change = 0
-        self.y_change = 0
+        if self.x_change != 0:
+            self.x_change += -self.x_change / abs(self.x_change) * 1
+        elif self.y_change != 0:
+            self.y_change += -self.y_change / abs(self.y_change) * 1
 
     def movement(self):
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_s]:
-            self.y_change += 1
-            self.facing = 'down'
-            for sprite in self.game.all_sprites:
-                sprite.rect.y -= 1
-        elif keys[pygame.K_w]:
-            self.y_change -= 1
-            self.facing = 'up'
-            for sprite in self.game.all_sprites:
-                sprite.rect.y += 1
-        elif keys[pygame.K_a]:
-            self.x_change -= 1
-            self.facing = 'left'
-            for sprite in self.game.all_sprites:
-                sprite.rect.x += 1
-        elif keys[pygame.K_d]:
-            self.x_change += 1
-            self.facing = 'right'
-            for sprite in self.game.all_sprites:
-                sprite.rect.x -= 1
+        if not self.data.holdPosition:
+            if self.movementTick > 0:
+                self.movementTick -= 1
+            if self.movementTick == 0:
+                self.facing = random.choice(['left', 'right', 'down', 'up'])
+                self.movementTick = random.randint(60, 300)
+            if self.facing == 'left':
+                self.x_change = - GLOBAL_SPEED
+            elif self.facing == 'right':
+                self.x_change = GLOBAL_SPEED
+            elif self.facing == 'up':
+                self.y_change = - GLOBAL_SPEED
+            elif self.facing == 'down':
+                self.y_change = GLOBAL_SPEED
 
     def collide_blocks(self, direction):
+        self.hitbox = self.rect.inflate(0, -16).copy()
+        self.hitbox.y = self.rect.y + 16
+        hits = pygame.sprite.spritecollide(self, self.game.blocks, False, collided)
+        hits1 = pygame.sprite.spritecollide(self, self.game.objects, False, collided)
         if direction == 'x':
-            hits = pygame.sprite.spritecollide(self, self.game.blocks, False)
             if hits:
                 if self.x_change > 0:
                     self.rect.x = hits[0].rect.left - self.rect.width
-                    for sprite in self.game.all_sprites:
-                        sprite.rect.x += 1
+                    self.facing = random.choice(['down', 'left', 'up'])
                 if self.x_change < 0:
-                    self.rect.x = hits[0].rect.right
-                    for sprite in self.game.all_sprites:
-                        sprite.rect.x -= 1
+                    self.rect.x = hits[0].rect.right - (self.rect.width - self.hitbox.width)
+                    self.facing = random.choice(['down', 'right', 'up'])
+                self.x_change = 0
         if direction == 'y':
-            hits = pygame.sprite.spritecollide(self, self.game.blocks, False)
             if hits:
                 if self.y_change > 0:
                     self.rect.y = hits[0].rect.top - self.rect.height
-                    for sprite in self.game.all_sprites:
-                        sprite.rect.y += 1
+                    self.facing = random.choice(['left', 'up', 'right'])
                 if self.y_change < 0:
-                    self.rect.y = hits[0].rect.bottom
-                    for sprite in self.game.all_sprites:
-                        sprite.rect.y -= 1
+                    self.rect.y = hits[0].rect.bottom - (self.rect.height - self.hitbox.height)
+                    self.facing = random.choice(['left', 'down', 'right'])
+                self.y_change = 0
+        if direction == 'x':
+            if hits1:
+                if self.x_change > 0:
+                    self.rect.x = hits1[0].rect.left - self.rect.width
+                    self.facing = random.choice(['down', 'left', 'up'])
+                if self.x_change < 0:
+                    self.rect.x = hits1[0].rect.right - (self.rect.width - self.hitbox.width)
+                    self.facing = random.choice(['down', 'right', 'up'])
+                self.x_change = 0
+        if direction == 'y':
+            if hits1:
+                if self.y_change > 0:
+                    self.rect.y = hits1[0].rect.top - self.rect.height
+                    self.facing = random.choice(['left', 'up', 'right'])
+                if self.y_change < 0:
+                    self.rect.y = hits1[0].rect.bottom - (self.rect.height - self.hitbox.height)
+                    self.facing = random.choice(['left', 'down', 'right'])
+                self.y_change = 0
 
     def animate(self):
-        down_animations = [self.game.character_spritesheet.get_sprite(3, 2, self.width, self.height),
-                           self.game.character_spritesheet.get_sprite(35, 2, self.width, self.height),
-                           self.game.character_spritesheet.get_sprite(68, 2, self.width, self.height)]
-        up_animations = [self.game.character_spritesheet.get_sprite(3, 34, self.width, self.height),
-                         self.game.character_spritesheet.get_sprite(35, 34, self.width, self.height),
-                         self.game.character_spritesheet.get_sprite(68, 34, self.width, self.height)]
-        left_animations = [self.game.character_spritesheet.get_sprite(3, 98, self.width, self.height),
-                           self.game.character_spritesheet.get_sprite(35, 98, self.width, self.height),
-                           self.game.character_spritesheet.get_sprite(68, 98, self.width, self.height)]
-        right_animations = [self.game.character_spritesheet.get_sprite(3, 66, self.width, self.height),
-                            self.game.character_spritesheet.get_sprite(35, 66, self.width, self.height),
-                            self.game.character_spritesheet.get_sprite(68, 66, self.width, self.height)]
+        coord = self.data.sprite
+        down_animations = [self.game.playableNpcs_spritesheet.get_sprite(coord[0], coord[1], self.width, self.height),
+                           self.game.playableNpcs_spritesheet.get_sprite(coord[0], coord[1] + 30, self.width,
+                                                                         self.height),
+                           self.game.playableNpcs_spritesheet.get_sprite(coord[0], coord[1] + 60, self.width,
+                                                                         self.height)]
+        up_animations = [
+            self.game.playableNpcs_spritesheet.get_sprite(coord[0] + 30, coord[1], self.width, self.height),
+            self.game.playableNpcs_spritesheet.get_sprite(coord[0] + 30, coord[1] + 30, self.width,
+                                                          self.height),
+            self.game.playableNpcs_spritesheet.get_sprite(coord[0] + 30, coord[1] + 60, self.width,
+                                                          self.height)]
+        left_animations = [
+            self.game.playableNpcs_spritesheet.get_sprite(coord[0] + 60, coord[1], self.width, self.height),
+            self.game.playableNpcs_spritesheet.get_sprite(coord[0] + 60, coord[1] + 30, self.width,
+                                                          self.height),
+            self.game.playableNpcs_spritesheet.get_sprite(coord[0] + 60, coord[1] + 60, self.width,
+                                                          self.height)]
+        right_animations = [
+            self.game.playableNpcs_spritesheet.get_sprite(coord[0] + 90, coord[1], self.width, self.height),
+            self.game.playableNpcs_spritesheet.get_sprite(coord[0] + 90, coord[1] + 30, self.width, self.height),
+            self.game.playableNpcs_spritesheet.get_sprite(coord[0] + 90, coord[1] + 60, self.width, self.height)]
 
         if self.facing == 'down':
             if self.y_change == 0:
-                self.image = self.game.character_spritesheet.get_sprite(3, 2, self.width, self.height)
+                self.image = pygame.transform.scale(
+                    self.game.playableNpcs_spritesheet.get_sprite(coord[0], coord[1], self.width, self.height),
+                    (self.width * 2, self.height * 2))
             else:
-                self.image = down_animations[math.floor(self.animation_loop)]
+                self.image = pygame.transform.scale(down_animations[math.floor(self.animation_loop)],
+                                                    (self.width * 2, self.height * 2))
                 self.animation_loop += 0.1
                 if self.animation_loop >= 3:
                     self.animation_loop = 1
         if self.facing == 'up':
             if self.y_change == 0:
-                self.image = self.game.character_spritesheet.get_sprite(3, 34, self.width, self.height)
+                self.image = pygame.transform.scale(
+                    self.game.playableNpcs_spritesheet.get_sprite(coord[0] + 30, coord[1], self.width,
+                                                                  self.height), (self.width * 2, self.height * 2))
             else:
-                self.image = up_animations[math.floor(self.animation_loop)]
+                self.image = pygame.transform.scale(up_animations[math.floor(self.animation_loop)],
+                                                    (self.width * 2, self.height * 2))
                 self.animation_loop += 0.1
                 if self.animation_loop >= 3:
                     self.animation_loop = 1
         if self.facing == 'left':
             if self.x_change == 0:
-                self.image = self.game.character_spritesheet.get_sprite(3, 98, self.width, self.height)
+                self.image = pygame.transform.scale(
+                    self.game.playableNpcs_spritesheet.get_sprite(coord[0] + 60, coord[1], self.width,
+                                                                  self.height), (self.width * 2, self.height * 2))
             else:
-                self.image = left_animations[math.floor(self.animation_loop)]
+                self.image = pygame.transform.scale(left_animations[math.floor(self.animation_loop)],
+                                                    (self.width * 2, self.height * 2))
                 self.animation_loop += 0.1
                 if self.animation_loop >= 3:
                     self.animation_loop = 1
         if self.facing == 'right':
             if self.x_change == 0:
-                self.image = self.game.character_spritesheet.get_sprite(3, 66, self.width, self.height)
+                self.image = pygame.transform.scale(
+                    self.game.playableNpcs_spritesheet.get_sprite(coord[0] + 90, coord[1], self.width,
+                                                                  self.height), (self.width * 2, self.height * 2))
             else:
-                self.image = right_animations[math.floor(self.animation_loop)]
+                self.image = pygame.transform.scale(right_animations[math.floor(self.animation_loop)],
+                                                    (self.width * 2, self.height * 2))
                 self.animation_loop += 0.1
                 if self.animation_loop >= 3:
                     self.animation_loop = 1
@@ -334,216 +482,416 @@ class Enemy(pygame.sprite.Sprite):
         pass
 
 
-class Block(pygame.sprite.Sprite):
-
-    def __init__(self, game, x, y, tag=''):
-        self.game = game
-        self._layer = BLOCK_LAYER
-        self.groups = self.game.all_sprites, self.game.blocks
-        pygame.sprite.Sprite.__init__(self, self.groups)
-
-        self.tags = tag
-        self.x = x * TILESIZE
-        self.y = y * TILESIZE
-        self.width = TILESIZE
-        self.height = TILESIZE
-
-        self.image = self.game.terrain_spritesheet.get_sprite(960, 448, self.width, self.height)
-        self.rect = self.image.get_rect()
-        self.rect.x = self.x
-        self.rect.y = self.y
-
-
-class Ground(pygame.sprite.Sprite):
-    def __init__(self, game, x, y, tag=''):
+class BackgroundMap(pygame.sprite.Sprite):
+    def __init__(self, game, x, y, name):
         self.game = game
         self._layer = GROUND_LAYER
         self.groups = self.game.all_sprites
         pygame.sprite.Sprite.__init__(self, self.groups)
 
-        self.tags = tag
+        self.name = name
         self.x = x * TILESIZE
         self.y = y * TILESIZE
-        self.width = TILESIZE
-        self.height = TILESIZE
+        self.width = 6120
+        self.height = 2048
+        self.music = None
 
-        self.image = self.game.terrain_spritesheet.get_sprite(64, 352, self.width, self.height)
+        self.image = self.game.map_spritesheet.get_sprite(0, 0, 6120, 2048)
         self.rect = self.image.get_rect()
         self.rect.x = self.x
         self.rect.y = self.y
+        self.warpCoord = []
+
+        if self.name == 'DomaCastle':
+            # DomaCastleTheme
+            self.music = "ost/113_Cyan.mp3"
+            pygame.mixer.music.load(self.music)
+            pygame.mixer.music.set_volume(0.5)
+            # pygame.mixer.music.play(-1)
+
+            # WarpCoords
+            self.warpCoord.append(['spawn0', [33, 38]])
+            self.warpCoord.append(['DomaCastleExterior0', [1052, 1522]])
+            self.warpCoord.append(['DomaCastleExterior1', [1060, 1160]])
+            self.warpCoord.append(['DomaCastleInterior1', [4390, 1488]])  # Main Room
+            self.warpCoord.append(['DomaCastleInterior1Exit', [894, 1053]])
+            self.warpCoord.append(['DomaCastleInterior2', [5862, 1610]])  # Bedrooms 1
+            self.warpCoord.append(['DomaCastleInterior2Exit', [4232, 1422]])
+            self.warpCoord.append(['DomaCastleInterior3', [4200, 338]])  # Bedrooms 2
+            self.warpCoord.append(['DomaCastleInterior3Exit', [4552, 1422]])
+            self.warpCoord.append(['DomaCastleInterior4', [5352, 274]])  # Kitchen 1.1
+            self.warpCoord.append(['DomaCastleInterior4Exit', [4202, 1082]])
+            self.warpCoord.append(['DomaCastleInterior5', [5640, 274]])  # Kitchen 1.2
+            self.warpCoord.append(['DomaCastleInterior5Exit', [4586, 1082]])
+            self.warpCoord.append(['DomaCastleInterior6', [5704, 882]])  # Stairs 1
+            self.warpCoord.append(['DomaCastleInterior6Exit', [4614, 1138]])
+            self.warpCoord.append(['DomaCastleInterior7', [3742, 1938]])  # Storage 1
+            self.warpCoord.append(['DomaCastleInterior7Exit', [5352, 274]])
+            self.warpCoord.append(['DomaCastleInterior8', [4968, 1074]])  # Bedrooms 3
+            self.warpCoord.append(['DomaCastleInterior8Exit', [5416, 274]])
+            self.warpCoord.append(['DomaCastleInterior9', [4968, 1650]])  # Armory 1
+            self.warpCoord.append(['DomaCastleInterior9Exit', [5672, 818]])
+            self.warpCoord.append(['DomaCastleInteriorThroneRoom', [4872, 466]])
+            self.warpCoord.append(['DomaCastleInteriorThroneRoomExit', [4392, 1138]])
+
+            # Teleport Zones
+            Block(self.game, 1000, 1232, 160, 16, YELLOW, 'DomaCastleExterior0')
+            Block(self.game, 1048, 1440, 40, 64, YELLOW, 'DomaCastleExterior1')
+            Block(self.game, 882, 1020, 62, 32, YELLOW, 'DomaCastleInterior1')  # Main Room
+            Block(self.game, 4392, 1546, 32, 22, YELLOW, 'DomaCastleInterior1Exit')
+            Block(self.game, 4234, 1392, 32, 40, YELLOW, 'DomaCastleInterior2')  # Bedrooms 1
+            Block(self.game, 5864, 1664, 32, 32, YELLOW, 'DomaCastleInterior2Exit')
+            Block(self.game, 4556, 1392, 32, 40, YELLOW, 'DomaCastleInterior3')  # Bedrooms 2
+            Block(self.game, 4200, 384, 32, 40, YELLOW, 'DomaCastleInterior3Exit')
+            Block(self.game, 4202, 1064, 32, 16, YELLOW, 'DomaCastleInterior4')  # Kitchen 1.1
+            Block(self.game, 5352, 320, 32, 32, YELLOW, 'DomaCastleInterior4Exit')
+            Block(self.game, 4586, 1064, 32, 16, YELLOW, 'DomaCastleInterior5')  # Kitchen 1.2
+            Block(self.game, 5640, 320, 32, 32, YELLOW, 'DomaCastleInterior5Exit')
+            Block(self.game, 4614, 1184, 32, 32, YELLOW, 'DomaCastleInterior6')  # Stairs 1
+            Block(self.game, 5704, 928, 32, 32, YELLOW, 'DomaCastleInterior6Exit')
+            Block(self.game, 5352, 256, 32, 32, YELLOW, 'DomaCastleInterior7')  # Storage 1
+            Block(self.game, 3742, 1984, 32, 32, YELLOW, 'DomaCastleInterior7Exit')
+            Block(self.game, 5416, 256, 32, 32, YELLOW, 'DomaCastleInterior8')  # Bedrooms 3
+            Block(self.game, 4968, 1120, 32, 32, YELLOW, 'DomaCastleInterior8Exit')
+            Block(self.game, 5608, 864, 32, 32, YELLOW, 'DomaCastleInterior9')  # Armory 1
+            Block(self.game, 4968, 1696, 32, 32, YELLOW, 'DomaCastleInterior9Exit')
+            Block(self.game, 4376, 1088, 64, 64, YELLOW, 'DomaCastleInteriorThroneRoom')
+            Block(self.game, 4872, 512, 32, 32, YELLOW, 'DomaCastleInteriorThroneRoomExit')
+
+            # Fixed NPCs:
+            Npc(self.game, -1, -1, self.name, 'king')
+
+            # Left Side of Castle Gate
+            Block(self.game, 1016, 1440, 32, 64)
+            Block(self.game, 1016, 1440, 32, 64)
+            Block(self.game, 576, 1378, 288, 216)
+            Block(self.game, 778, 1594, 50, 30)
+            Block(self.game, 368, 1314, 208, 192)
+            Block(self.game, 352, 1218, 64, 320)
+            Block(self.game, 832, 1346, 184, 224)
+            Block(self.game, 980, 1570, 36, 96)
+
+            # Right Side of Castle Gate
+            Block(self.game, 1048, 1440, 48, 32)
+            Block(self.game, 1088, 1440, 32, 64)
+            Block(self.game, 1120, 1346, 192, 224)
+            Block(self.game, 1120, 1570, 32, 96)
+            Block(self.game, 1312, 1378, 352, 224)
+            Block(self.game, 1276, 1570, 36, 32)
+            Block(self.game, 1324, 1602, 32, 16)
+            Block(self.game, 1632, 1282, 128, 224)
+
+            # DomaCastleExterior1
+            Block(self.game, 882, 1000, 64, 2)
+            Block(self.game, 984, 1238, 160, 32)
+            Block(self.game, 968, 1190, 32, 48)
+            Block(self.game, 1144, 1190, 32, 48)
+            Block(self.game, 672, 1120, 356, 70)
+            Block(self.game, 1118, 1120, 32, 64)
+            Block(self.game, 1150, 966, 32, 160)
+            Block(self.game, 1150, 966, 352, 32)
+            Block(self.game, 1502, 672, 32, 320)
+            Block(self.game, 1534, 576, 32, 96)
+            Block(self.game, 1406, 540, 128, 32)
+            Block(self.game, 1406, 540, 32, 352)  # Possible that we set floors tag in there
+            Block(self.game, 1086, 872, 352, 32)
+            Block(self.game, 1054, 872, 32, 180)
+            Block(self.game, 734, 1020, 148, 32)
+            Block(self.game, 734, 872, 32, 180)
+            Block(self.game, 546, 1024, 128, 192)
+            Block(self.game, 450, 720, 32, 500)
+            Block(self.game, 450, 1220, 96, 32)
+            Block(self.game, 258, 720, 222, 32)
+            Block(self.game, 258, 572, 318, 32)
+            Block(self.game, 258, 572, 32, 160)
+            Block(self.game, 354, 572, 128, 96)
+            Block(self.game, 544, 572, 62, 388)
+            Block(self.game, 546, 896, 128, 64)
+            Block(self.game, 672, 896, 64, 32)
+            Block(self.game, 944, 1020, 128, 32)
+            Npc(self.game, 490, 684, self.name, 'guard')
+            Npc(self.game, 1472, 600, self.name, 'guard')
+
+            # DomaCastleWalls
+            Block(self.game, 736, 736, 32, 160)
+            Block(self.game, 736, 704, 64, 32)
+            Block(self.game, 1056, 736, 32, 160)
+            Block(self.game, 1024, 704, 64, 32)
+            Block(self.game, 800, 736, 224, 64)
+            Block(self.game, 768, 864, 320, 32)
+            Block(self.game, 960, 800, 64, 16)
+            Block(self.game, 800, 800, 64, 16)
+            Objects(self.game, 1024, 736, 32, 32, 'chest', mapName=self.name)
+            Npc(self.game, 896, 804, self.name, 'guard')
+            Npc(self.game, 912, 804, self.name, 'guard')
+
+            # DomaCastleInterior1 MainRoom
+            Block(self.game, 4327, 1546, 65, 22)
+            Block(self.game, 4424, 1546, 68, 22)
+            Block(self.game, 4392, 1568, 32, 11)
+            Block(self.game, 4488, 1504, 31, 48)
+            Block(self.game, 4520, 1504, 68, 16)
+            Block(self.game, 4584, 1375, 6, 129)
+            Block(self.game, 4296, 1504, 32, 52)
+            Block(self.game, 4228, 1504, 68, 16)
+            Block(self.game, 4222, 1375, 6, 129)
+            Block(self.game, 4270, 1375, 20, 60)
+            Block(self.game, 4297, 1455, 32, 1)
+            Block(self.game, 4485, 1455, 32, 1)
+            Block(self.game, 4524, 1375, 20, 60)
+            Block(self.game, 4336, 1306, 18, 166)
+            Block(self.game, 4464, 1306, 18, 166)
+            Block(self.game, 4163, 1184, 165, 135)
+            Block(self.game, 4488, 1184, 125, 135)
+            Block(self.game, 4648, 1184, 32, 32)
+            Block(self.game, 4148, 993, 16, 189)
+            Block(self.game, 4680, 993, 16, 189)
+            Block(self.game, 4148, 993, 36, 16)
+            Block(self.game, 4166, 1064, 36, 16)
+            Block(self.game, 4234, 1064, 94, 16)
+            Block(self.game, 4328, 1064, 48, 88)
+            Block(self.game, 4440, 1064, 48, 88)
+            Block(self.game, 4488, 1064, 98, 16)
+            Block(self.game, 4618, 1064, 66, 16)
+            Block(self.game, 4648, 1080, 36, 8)
+            Block(self.game, 4234, 1360, 32, 32)
+            Block(self.game, 4555, 1360, 32, 32)
+            Block(self.game, 4617, 1217, 32, 32)
+            Block(self.game, 4580, 1032, 32, 32)
+            Block(self.game, 4200, 1032, 32, 32)
+            Block(self.game, 4375, 1064, 64, 32)
+            Npc(self.game, 4874, 292, self.name, 'guard')
+            Npc(self.game, 4874, 260, self.name, 'guard')
+
+            # DoomCastleInterior2 Bedroom1
+            Block(self.game, 5864, 1696, 32, 32)
+            Block(self.game, 5896, 1664, 64, 32)
+            Block(self.game, 5928, 1472, 32, 224)
+            Block(self.game, 5480, 1472, 512, 32)
+            Block(self.game, 5480, 1472, 32, 224)
+            Block(self.game, 5480, 1664, 384, 32)
+            Block(self.game, 5537, 1504, 46, 75)
+            Block(self.game, 5665, 1504, 46, 75)
+            Block(self.game, 5793, 1504, 46, 75)
+            Block(self.game, 5537, 1628, 46, 65)
+            Block(self.game, 5665, 1628, 46, 65)
+            Block(self.game, 5793, 1628, 46, 65)
+            Block(self.game, 5738, 1508, 28, 28)
+            Objects(self.game, 5865, 1504, 32, 32, 'chest', mapName=self.name)
+            Npc(self.game, 5665, 1536, self.name, 'guard')
+
+            # DoomCastleInterior3 Bedroom2
+            Block(self.game, 4200, 416, 32, 32)
+            Block(self.game, 4232, 384, 260, 32)
+            Block(self.game, 4456, 158, 32, 216)
+            Block(self.game, 4132, 126, 416, 32)
+            Block(self.game, 4100, 126, 32, 280)
+            Block(self.game, 4100, 384, 96, 32)
+            Block(self.game, 4144, 150, 80, 42)
+            Block(self.game, 4168, 224, 32, 32)
+            Block(self.game, 4258, 144, 44, 88)
+            Block(self.game, 4386, 144, 44, 88)
+            Block(self.game, 4386, 276, 44, 88)
+            Block(self.game, 4258, 276, 44, 88)
+            Objects(self.game, 4136, 352, 32, 32, 'chest', mapName=self.name)
+            Objects(self.game, 4136, 320, 32, 32, 'chest', mapName=self.name)
+            Objects(self.game, 4136, 288, 32, 32, 'chest', mapName=self.name)
+            Npc(self.game, 4168, 320, self.name, 'guard')
+            Npc(self.game, 4304, 232, self.name, 'guard')
+
+            # DoomCastleInterior4/5 Kitchen
+            Block(self.game, 5672, 320, 224, 32)
+            Block(self.game, 5384, 320, 256, 32)
+            Block(self.game, 5288, 320, 64, 32)
+            Block(self.game, 5288, 256, 32, 96)
+            Block(self.game, 5320, 256, 32, 32)
+            Block(self.game, 5384, 256, 32, 32)
+            Block(self.game, 5448, 256, 192, 32)
+            Block(self.game, 5352, 352, 32, 32)
+            Block(self.game, 5640, 352, 32, 32)
+            Block(self.game, 5352, 240, 32, 16)
+            Block(self.game, 5416, 240, 32, 16)
+            Block(self.game, 5512, 32, 128, 256)
+            Block(self.game, 5640, 128, 256, 32)
+            Block(self.game, 5864, 32, 32, 288)
+            Block(self.game, 5712, 142, 80, 50)
+            Block(self.game, 5640, 160, 32, 32)
+            Block(self.game, 5704, 224, 32, 32)
+            Block(self.game, 5800, 232, 32, 89)
+            Block(self.game, 5800, 232, 64, 46)
+            Objects(self.game, 5832, 160, 32, 32, 'chest', mapName=self.name)
+            Npc(self.game, 5768, 232, self.name, 'guard')
+
+            # DomaCastleInterior6 Stairs1
+            Block(self.game, 5736, 928, 160, 32)
+            Block(self.game, 5704, 960, 32, 32)
+            Block(self.game, 5640, 864, 64, 96)
+            Block(self.game, 5608, 896, 32, 32)
+            Block(self.game, 5576, 800, 32, 96)
+            Block(self.game, 5576, 800, 320, 32)
+            Block(self.game, 5832, 800, 32, 160)
+            Npc(self.game, 5770, 860, self.name, 'guard')
+
+            # DomaCastleInterior7 Storage1
+            Block(self.game, 3742, 2016, 32, 32)
+            Block(self.game, 3774, 1984, 128, 32)
+            Block(self.game, 3710, 1984, 32, 32)
+            Block(self.game, 3678, 1824, 32, 160)
+            Block(self.game, 3678, 1824, 224, 32)
+            Block(self.game, 3870, 1824, 32, 160)
+            Objects(self.game, 3806, 1856, 32, 32, 'chest', mapName=self.name)
+            Objects(self.game, 3838, 1856, 32, 32, 'chest', mapName=self.name)
+
+            # DomaCastleInterior8 Bedroom3
+            Block(self.game, 5000, 1120, 192, 32)
+            Block(self.game, 4968, 1152, 32, 32)
+            Block(self.game, 4904, 1120, 64, 32)
+            Block(self.game, 4904, 896, 32, 224)
+            Block(self.game, 4944, 952, 80, 40)
+            Block(self.game, 5000, 766, 32, 192)
+            Block(self.game, 5032, 864, 96, 32)
+            Block(self.game, 5128, 864, 32, 96)
+            Block(self.game, 5128, 928, 160, 32)
+            Block(self.game, 5256, 960, 32, 64)
+            Block(self.game, 5160, 1024, 128, 96)
+            Block(self.game, 5154, 944, 76, 96)
+            Objects(self.game, 5128, 1088, 32, 32, 'chest', mapName=self.name)
+
+            # DomaCastleInterior9 Armory1
+            Block(self.game, 5000, 1696, 96, 32)
+            Block(self.game, 4968, 1728, 32, 32)
+            Block(self.game, 4936, 1696, 32, 32)
+            Block(self.game, 4904, 1536, 32, 160)
+            Block(self.game, 4904, 1536, 224, 32)
+            Block(self.game, 5096, 1536, 32, 192)
+            Block(self.game, 4936, 1568, 32, 32)
+            Block(self.game, 5032, 1568, 32, 32)
+            Block(self.game, 4936, 1632, 32, 32)
+            Objects(self.game, 4968, 1568, 32, 32, 'chest', mapName=self.name)
+            Objects(self.game, 5064, 1600, 32, 32, 'chest', mapName=self.name)
+            Objects(self.game, 5064, 1664, 32, 32, 'chest', mapName=self.name)
+            Objects(self.game, 5032, 1664, 32, 32, 'chest', mapName=self.name)
+            Objects(self.game, 4936, 1664, 32, 32, 'chest', mapName=self.name)
+            Npc(self.game, 5000, 1632, self.name, 'guard')
+
+            # DoomCastleInterior ThroneRoom
+            Block(self.game, 4872, 544, 32, 32)
+            Block(self.game, 4904, 512, 32, 32)
+            Block(self.game, 4840, 512, 32, 32)
+            Block(self.game, 4936, 480, 32, 32)
+            Block(self.game, 4808, 480, 32, 32)
+            Block(self.game, 4776, 368, 32, 116)
+            Block(self.game, 4968, 368, 32, 116)
+            Block(self.game, 5000, 416, 64, 64)
+            Block(self.game, 5064, 192, 32, 224)
+            Block(self.game, 5000, 222, 64, 98)
+            Block(self.game, 5000, 94, 32, 128)
+            Block(self.game, 4840, 128, 32, 32)
+            Block(self.game, 4904, 128, 32, 32)
+            Block(self.game, 4872, 96, 32, 32)
+            Block(self.game, 4776, 128, 64, 116)
+            Block(self.game, 4936, 128, 64, 116)
+            Block(self.game, 4712, 224, 64, 96)
+            Block(self.game, 4712, 224, 32, 144)
+            Block(self.game, 5034, 224, 32, 144)
+            Block(self.game, 4712, 416, 64, 32)
+            Block(self.game, 4690, 354, 22, 62)
+            Block(self.game, 4808, 384, 32, 32)
+            Block(self.game, 4936, 384, 32, 32)
+            Block(self.game, 4850, 268, 10, 10)
+            Block(self.game, 4914, 268, 10, 10)
+
+            # Left Side Ocean of Castle Gate
+            Block(self.game, 0, 1984, 832, 32)
+            Block(self.game, 832, 1952, 96, 32)
+            Block(self.game, 928, 1854, 32, 96)
+            Block(self.game, 704, 1704, 128, 32)
+            Block(self.game, 608, 1768, 320, 96)
+            Block(self.game, 672, 1736, 192, 32)
+            Block(self.game, 448, 1640, 64, 96)
+            Block(self.game, 512, 1704, 32, 32)
+            Block(self.game, 544, 1736, 32, 32)
+            Block(self.game, 576, 1768, 32, 32)
+            Block(self.game, 320, 1608, 128, 32)
+            Block(self.game, 288, 1448, 32, 160)
+            Block(self.game, 320, 1416, 32, 32)
+
+            # Right Side Ocean of Castle Gate
+            Block(self.game, 1184, 1800, 32, 96)
+            Block(self.game, 1216, 1768, 32, 32)
+            Block(self.game, 1248, 1704, 32, 64)
+            Block(self.game, 1280, 1736, 32, 32)
+            Block(self.game, 1312, 1768, 64, 32)
+            Block(self.game, 1376, 1736, 96, 32)
+            Block(self.game, 1472, 1704, 32, 32)
+            Block(self.game, 1504, 1672, 32, 32)
+            Block(self.game, 1520, 1656, 16, 16)
+            Block(self.game, 1536, 1704, 32, 32)
+            Block(self.game, 1568, 1736, 64, 32)
+            Block(self.game, 1632, 1704, 32, 32)
+            Block(self.game, 1664, 1672, 64, 32)
+            Block(self.game, 1728, 1576, 32, 96)
+            Block(self.game, 1760, 1512, 32, 64)
+            Block(self.game, 1216, 1896, 96, 32)
+            Block(self.game, 1312, 1928, 128, 32)
+            Block(self.game, 1440, 1960, 64, 32)
+            Block(self.game, 1472, 1984, 640, 32)
+
+            # Out of Bounds:
+            Block(self.game, -32, -32, 2080, 32, RED)
+            Block(self.game, -32, -32, 32, 2080, RED)
+            Block(self.game, 2048, -32, 32, 2112, RED)
+            Block(self.game, -32, 2048, 2080, 32, RED)
+
+    def update(self):
+        if not pygame.mixer.music.get_busy():
+            pygame.mixer.music.load(self.music)
+            pygame.mixer.music.set_volume(0.5)
+            # pygame.mixer.music.play(-1)
 
 
-class HardCodedButton(pygame.sprite.Sprite):
-    def __init__(self, game, x, y, width, height, fg, bg, content=None, fontsize=16, tags=[], itemToUse=None,
-                 Target=None):
-        if 'gui' in tags or itemToUse:
-            self._layer = PLAYER_LAYER + 1
-            self.groups = game.gui_sprites
-            pygame.sprite.Sprite.__init__(self, self.groups)
+class Block(pygame.sprite.Sprite):
+    def __init__(self, game, x, y, width, height, color=GREEN, zone=None, hasHitBox=True, sprite=None, tags=None,
+                 isGround=False, setLayer=False):
+        # Using them as walls and teleport zones for uncanny reasons
         self.game = game
-        self.font = pygame.font.Font('text/arial.ttf', fontsize)
+        self._layer = BLOCK_LAYER
+        self.hasHitBox = hasHitBox
+        self.zone = zone
+        self.tags = tags
+        if self.zone:
+            self.groups = self.game.all_sprites, self.game.teleportZone
+        elif self.hasHitBox:
+            self.groups = self.game.all_sprites, self.game.blocks
+        elif isGround:
+            self.groups = self.game.all_sprites
+            self._layer = GROUND_LAYER
+        else:
+            self.groups = self.game.all_sprites
+            self._layer = BLOCK_LAYER
+        if setLayer:
+            self._layer = PLAYER_LAYER + 1
+        pygame.sprite.Sprite.__init__(self, self.groups)
+
         self.x = x
         self.y = y
         self.width = width
         self.height = height
-        self.fg = fg
-        self.bg = bg
-        self.content = content
-        if itemToUse and not content:
-            self.content = itemToUse
-        self.tags = tags
-        self.itemToUse = itemToUse
 
+        self.color = color
         self.image = pygame.Surface((self.width, self.height))
-        self.image.fill(self.bg)
+        if sprite:
+            self.image = pygame.transform.scale(sprite, (32, 32))
+        else:
+            self.image.fill(self.color)
+            self.image.set_colorkey(WHITE)
         self.rect = self.image.get_rect()
-
         self.rect.x = self.x
         self.rect.y = self.y
-
-        self.text = self.font.render(self.content, True, self.fg)
-        self.text_rect = self.text.get_rect(center=(self.width / 2, self.height / 2))
-        self.image.blit(self.text, self.text_rect)
+        self.hitbox = self.rect.inflate(0, 0)
 
     def update(self):
-        self.game.screen.blit(self.image, self.rect)
-        if self.is_pressed(self.game.mouse_pos, self.game.mouse_pressed):
-            if self.content not in ['YES', 'NO']:
-                self.game.player.itemToUse = self.itemToUse
-                Inventory(self.game, 3)
-            elif self.content == 'YES':
-                self.game.player.useItem(self.game.player.itemToUse)
-                self.game.player.itemToUse = None
-                Inventory(self.game, 1)
-            elif self.content == 'NO':
-                self.game.player.itemToUse = None
-                Inventory(self.game, 1)
-
-    def is_pressed(self, pos, pressed):
-        if self.rect.collidepoint(pos):
-            if pressed[0]:
-                return True
-            return False
-        return False
-
-
-class GuiHelp(pygame.sprite.Sprite):
-    def __init__(self, game, x, y, text, color, state, Type='', Target=''):
-        self.game = game
-        self._layer = GUI_LAYER
-        self.groups = self.game.all_sprites, self.game.gui_sprites
-        pygame.sprite.Sprite.__init__(self, self.groups)
-        self.state = state
-        self.text = text
-        self.color = color
-        self.type = Type
-        self.target = Target
-        self.font = pygame.font.Font('text/arial.ttf', 16)
-
-        self.x = x * TILESIZE
-        self.y = y * TILESIZE
-        self.width = TILESIZE
-        self.height = TILESIZE
-        self.Cx = x
-        self.Cy = y
-        self.internalTick = 0
-        self.animation_loop = 0
-        self.textList = self.game.party[0].data
-
-        if state == 1:
-            self._layer = PLAYER_LAYER + 1
-
-        L, W, X, Y, J = 0, 0, 0, 0, 0
-        if self.state == 0:
-            # Player Info General Base Inventory
-            L, W, X, Y, J = 363, 160, 0, 0, 3
-        elif self.state == 1:
-            # Base Menu Screen
-            L, W, X, Y, J = 520, 560, 5, 8, 3
-        elif self.state == 2:
-            # Info Bar 1
-            L, W, X, Y, J = 150, 360, 0, 0, 3
-        elif self.state == 3:
-            # Money Bar
-            L, W, X, Y, J = 150, 64, 0, 0, 3
-        elif self.state == 4:
-            # Inventory Screen
-            L, W, X, Y, J = 363, 360, 0, 0, 3
-        elif self.state == 5:
-            # Some Info
-            L, W, X, Y, J = 150, 126, 0, 0, 3
-        elif self.state == 6:
-            # Item usage confirmation
-            L, W, X, Y, J = 150, 42, 0, 0, 3
-
-        self.image = pygame.Surface((L, W))
-        if self.state == 1:
-            pygame.draw.rect(self.image, FF4BLACK, (3, 6, 514, 548))
-        self.image.fill(FF4WHITE, (X, Y, L - 2 * X, W - 2 * Y))
-        self.image.fill(FF4BLUE, (X + J, Y + J, L - 2 * (X + J), W - 2 * (Y + J)))
-        self.image.set_colorkey(BLACK)
-
-        if self.state == 0:
-            pos = [
-                # Y = 10, 46, 82 for more characters
-                [10, 46],  # Character
-                [50, 33],  # Name
-                [120, 33],  # Class
-                [50, 51],  # Level
-                [50, 67],  # HP
-                [50, 83],  # MP
-            ]
-            PlayerImage = self.game.character_spritesheet.get_sprite(3, 2, self.width, self.height)
-            self.image.blit(PlayerImage, pos[0])
-            self.image.blit(self.font.render(str(self.textList.name), True, FF4WHITE), pos[1])  # name
-            self.image.blit(self.font.render('Warrior', True, FF4WHITE), pos[2])  # Class
-            self.image.blit(self.font.render(('Level: ' + str(self.textList.lvl)), True, FF4WHITE), pos[3])  # Level
-            self.image.blit(
-                self.font.render(('HP: ' + str(self.textList.hp) + '/' + str(self.textList.maxhpmp[0])), True,
-                                 FF4WHITE), pos[4])  # HP
-            self.image.blit(
-                self.font.render(('MP: ' + str(self.textList.mp) + '/' + str(self.textList.maxhpmp[1])), True,
-                                 FF4WHITE), pos[5])  # MP
-        elif self.state == 4:
-            pos = [
-                [50, 10]
-            ]
-            Repeat = []
-            i = 0
-            for element in self.game.player.data.inv:
-                if element.name not in Repeat:
-                    j = 0
-                    for element2 in self.game.player.data.inv:
-                        if element2.name == element.name:
-                            j += 1
-                    text = str(j) + 'x ' + str(element.name)
-                    self.image.blit(self.font.render(str(i + 1) + ':', True, FF4WHITE), (10, 10 + 16 * i))  # name
-                    text_width, text_height = self.font.size(text)
-                    HardCodedButton(self.game, pos[0][0] + self.Cx, pos[0][1] + 16 * i + self.Cy, text_width,
-                                    text_height,
-                                    FF4WHITE, FF4BLUE, text, tags=['gui'], itemToUse=element.name)
-                    i += 1
-                    Repeat.append(element.name)
-        elif self.state == 6:
-            if isConsumable(self.game.player.itemToUse):
-                self.image.blit(self.font.render('Use item?', True, FF4WHITE), [40, 5])
-            else:
-                self.image.blit(self.font.render('Trash item?', True, FF4WHITE), [35, 5])
-            text_width, text_height = self.font.size('YES')
-            # self.image.blit(self.font.render('YES', True, FF4WHITE), [20, 21])
-            HardCodedButton(self.game, 20 + self.Cx, 21 + self.Cy, text_width, text_height, FF4WHITE, FF4BLUE,
-                            'YES', 16, ['gui'])
-            text_width, text_height = self.font.size('NO')
-            # self.image.blit(self.font.render('NO', True, FF4WHITE), [98, 21])
-            HardCodedButton(self.game, 98 + self.Cx, 21 + self.Cy, text_width, text_height, FF4WHITE, FF4BLUE,
-                            'NO', 16, ['gui'])
-
-        self.rect = self.image.get_rect()
-        self.rect.x = self.Cx
-        self.rect.y = self.Cy
-
-    def update(self, text=''):
-        pass
+        self.hitbox = self.rect.inflate(0, 0)
 
 
 class BattleScene(pygame.sprite.Sprite):
@@ -596,7 +944,8 @@ class BattleScene(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.x = 0
         self.rect.y = 0
-        self.originalImage = pygame.transform.scale(self.game.backgrounds_spritesheet.get_sprite(tempEnemies[1][0], tempEnemies[1][1], 240, 160), (640, 426))
+        self.originalImage = pygame.transform.scale(
+            self.game.backgrounds_spritesheet.get_sprite(tempEnemies[1][0], tempEnemies[1][1], 240, 160), (640, 426))
         self.image.blit(self.originalImage, (0, (640 - 537) / 2))
 
         self.enemyPositions = [
@@ -649,9 +998,10 @@ class BattleScene(pygame.sprite.Sprite):
         ]
 
         # Battle Theme
+        pygame.mixer.music.pause()
         pygame.mixer.music.load("ost/105_Battle_Theme.mp3")
         pygame.mixer.music.set_volume(0.5)
-        # pygame.mixer.music.play(-1)
+        pygame.mixer.music.play(-1)
 
         # blit enemies and player sprites
         for player in self.party:
@@ -729,7 +1079,7 @@ class BattleScene(pygame.sprite.Sprite):
                                 doNothingThisRound = True
                                 self.waitingForEnemy = 60
                                 AlertText(self.game, 'STUN', creature[0].x,
-                                          creature[0].y-64, YELLOW, 'damage')
+                                          creature[0].y - 64, YELLOW, 'damage')
                         dotDamage = creature[1].data.dotTick()
                         AlertText(self.game, str(dotDamage), creature[0].x,
                                   creature[0].y, PURPLE, 'damage')
@@ -759,7 +1109,8 @@ class BattleScene(pygame.sprite.Sprite):
             if not self.waitForPlayer:
                 # Actual enemies actions
                 for i in range(len(self.didSomethingThisRound) - 1, -1, -1):
-                    if type(self.didSomethingThisRound[i][1]) == Enemy and self.didSomethingThisRound[i][1].data.hp <= 0:
+                    if type(self.didSomethingThisRound[i][1]) == Enemy and self.didSomethingThisRound[i][
+                        1].data.hp <= 0:
                         del self.didSomethingThisRound[i]
                     elif type(self.didSomethingThisRound[i][1]) == Enemy and self.waitingForEnemy == 0:
                         doNothingThisRound = False
@@ -773,7 +1124,7 @@ class BattleScene(pygame.sprite.Sprite):
                                     print(self.didSomethingThisRound[i][1].data.dot)
                                     doNothingThisRound = True
                                     AlertText(self.game, 'STUN', self.didSomethingThisRound[i][0].x,
-                                              self.didSomethingThisRound[i][0].y-64, YELLOW, 'damage')
+                                              self.didSomethingThisRound[i][0].y - 64, YELLOW, 'damage')
                             if self.didSomethingThisRound[i][1].data.hp <= 0:
                                 for j, creature in enumerate(self.listOfHitBox):
                                     if creature[1] == self.didSomethingThisRound[i][1]:
@@ -1050,6 +1401,7 @@ class BattleScene(pygame.sprite.Sprite):
                     tempItemCount.append(item.name)
             pygame.image.save(self.image, 'image.png')
             if self.lootScreenTimer >= 120:
+                pygame.mixer.music.stop()
                 self.game.gameState = 1
                 for sprite in self.game.battle_sprites:
                     sprite.kill()
@@ -1422,6 +1774,7 @@ class BattleScene(pygame.sprite.Sprite):
     def check_key(self, key):
         if key == pygame.K_SPACE and not self.wonBattle:
             print('spacebar')
+            pygame.mixer.music.stop()
             self.game.gameState = 1
             for sprite in self.game.battle_sprites:
                 sprite.kill()
@@ -1537,27 +1890,41 @@ class AlertText(pygame.sprite.Sprite):
                 self.kill()
 
 
-def Inventory(self, state):
-    for sprite in self.gui_sprites:
-        sprite.kill()
-    if state == 1:
-        # Inventory Screen Base
-        GuiHelp(self, 60, 40, '', FF4BLUE, 1, 'gui', None)
-        GuiHelp(self, 65, 48, '', FF4BLUE, 0, 'gui', None)
-        GuiHelp(self, 425, 528, '', FF4BLUE, 3, 'gui', None)
-        GuiHelp(self, 65, 171, '', FF4BLUE, 4, 'gui', None)
-        # Text(self, 65, 48, '', FF4BLUE, 4, 'gui', None)
-    # X +- 5, Y +- 8 to fit State 1, does not generate black rect
-    elif state == 2:
-        # Inventory Options Bar
-        GuiHelp(self, 425, 48, '', FF4BLUE, 2, 'gui', None)
-        GuiHelp(self, 425, 405, '', FF4BLUE, 5, 'gui', None)
-    elif state == 3:
-        # Inventory Item Confirmation
-        GuiHelp(self, self.mouse_pos[0], self.mouse_pos[1], '', FF4BLUE, 6, 'gui', None)
+class Inventory(pygame.sprite.Sprite):
+    def __init__(self, game):
+        self.game = game
+
+        self._layer = GUI_LAYER
+        self.groups = self.game.all_sprites, self.game.gui_sprites, self.game.keyboardcheck, self.game.mousecheck
+        pygame.sprite.Sprite.__init__(self, self.groups)
+
+        self.font = pygame.font.Font('text/arial.ttf', 16)
+
+        self.listOfHitBox = []
+        self.itemToUse = []
+        self.state = 0
+
+        self.image = pygame.Surface((480, 480))
+        self.rect = self.image.get_rect()
+        self.rect.x = 80
+        self.rect.y = 80
+        CreateGuiBox(self.image, 0, 0, 480, 480)
+
+    def update(self):
+        pass
+
+    def check_mouse(self):
+        pass
+
+    def check_key(self):
+        pass
 
 
 def CreateGuiBox(image, x, y, width, height):
     pygame.draw.rect(image, FF4BLACK, (x, y, width, height))
     pygame.draw.rect(image, FF4WHITE, (x + 2, y + 2, width - 4, height - 4))
     pygame.draw.rect(image, FF4BLUE, (x + 5, y + 5, width - 10, height - 10))
+
+
+def collided(sprite, other):
+    return sprite.hitbox.colliderect(other.hitbox)

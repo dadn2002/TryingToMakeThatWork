@@ -22,6 +22,9 @@ class DataPlayer:
         self.lvl = 1
         self.maxhpmp = []
         self.dot = []
+        self.internalName = 'stragomagus'
+        self.sprite = []
+        self.missions = []
         self.update()
 
     def update(self):
@@ -54,6 +57,8 @@ class DataPlayer:
                 self.lvl = PlayerDataFromExcel[0][15]
                 self.maxhpmp = PlayerDataFromExcel[0][16]
                 break
+        if self.internalName.lower() == 'stragomagus':
+            self.sprite = [199, 5, 16, 24]
 
     def dotTick(self):
         totalDamage = 0
@@ -91,7 +96,10 @@ class DataPlayer:
                 break
 
     def addToInv(self, name):
-        self.inv.append(Item(name))
+        if type(name) is str:
+            self.inv.append(Item(name))
+        else:
+            self.inv.append(name)
 
     def checkInv(self, name):
         for element in self.inv:
@@ -183,6 +191,41 @@ class DataEnemy:
         ]
 
 
+class DataNpc:
+    def __init__(self, name, profession='', inventory='', map=''):
+        self.name = name
+        self.profession = profession
+        self.holdPosition = []
+        self.hasHitBox = False
+        self.textBox = []
+        self.inv = inventory
+        self.map = map
+        self.sprite = []
+        self.update()
+
+    def update(self):
+        if self.map.lower() == 'domacastle':
+            if self.name.lower() == 'guard':
+                self.sprite = [698, 5, 16, 24]
+            if self.name.lower() == 'king':
+                self.sprite = [552, 548, 16, 24]
+                self.textBox = [['Mission', 'DomaCastle1']]
+                self.holdPosition = [4872, 128, 'down']
+                self.hasHitBox = True
+
+    def info(self):
+        return [
+            self.name,
+            self.profession,
+            self.holdPosition,
+            self.hasHitBox,
+            self.textBox,
+            self.inv,
+            self.map,
+            self.sprite,
+        ]
+
+
 class Skills:
     def __init__(self, name):
         self.name = name.lower()
@@ -271,4 +314,3 @@ ListOfDot = [
     'poison1',
     'stun1'
 ]
-

@@ -1,18 +1,29 @@
+
+""" Thanks to
+https://www.chronocompendium.com/Term/Text_List_of_Sound_Effects.html
+https://www.spriters-resource.com/snes/ff6/
+https://bghq.com/bgs.php?n=pg
+https://www.zophar.net/music/nintendo-snes-spc/final-fantasy-vi
+https://www.ff6hacking.com/wiki/doku.php?id=ff3:ff3us:doc:asm:list:sfx#list_of_sound_effects
+
+
+"""
+
 WIN_WIDTH = 640
 WIN_HEIGHT = 640
 TILESIZE = 32
 FPS = 60
 PAUSE, INGAME, INVENTORY, SHOP = -1, 0, 1, 2
-FIXEDCAM = False
+FIXEDCAM = True
 
-GUI_LAYER = 5
-PLAYER_LAYER = 4
-ENEMY_LAYER = 3
-BLOCK_LAYER = 2
+GUI_LAYER = 7
+PLAYER_LAYER = 5
+ENEMY_LAYER = 4
+BLOCK_LAYER = 3
 GROUND_LAYER = 1
 
-GLOBAL_SPEED = 10
-# 10ig = 2rs, 20ig =
+GLOBAL_SPEED = 32
+PLAYER_SPEED = 8
 
 WHITE = (255, 255, 255)
 RED = (255, 0, 0)
